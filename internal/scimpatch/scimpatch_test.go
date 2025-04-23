@@ -83,12 +83,23 @@ func TestPatch(t *testing.T) {
 			err:  "unsupported 'add' operation on top-level object",
 		},
 		{
-			name: "invalid path",
+			name: "add to sub-object with existing prop",
 			in:   map[string]any{"foo": map[string]any{"bar": map[string]any{"baz": "xxx"}}},
 			ops:  []scimpatch.Operation{{Op: "add", Path: "foo.notbar.baz", Value: map[string]any{"baz": "yyy"}}},
-			err:  `invalid path: foo.notbar.baz`,
+			out:  map[string]any{"foo": map[string]any{
+				"bar":    map[string]any{"baz": "xxx"},
+				"notbar": map[string]any{"baz": map[string]any{"baz": "yyy"}},
+			}},
 		},
-
+		{
+			name: "add to top-level-object with existing prop",
+			in:   map[string]any{"foo": map[string]any{"bar": map[string]any{"baz": "xxx"}}},
+			ops:  []scimpatch.Operation{{Op: "add", Path: "bar.baz", Value: "yyy"}},
+			out:  map[string]any{
+				"foo": map[string]any{"bar": map[string]any{"baz": "xxx"}},
+				"bar": map[string]any{"baz": "yyy"},
+			},
+		},
 		{
 			name: "uppercase Replace op",
 			in:   map[string]any{"foo": "xxx"},
