@@ -122,7 +122,12 @@ func applyOp(op Operation, obj *map[string]any) error {
 
 		subV, ok := (*current)[segment.name].(map[string]any)
 		if !ok {
-			return fmt.Errorf("invalid path: %s", op.Path)
+			if opAdd {
+				subV = make(map[string]any)
+				(*current)[segment.name] = subV
+			} else {
+				return fmt.Errorf("invalid path: %s", op.Path)
+			}
 		}
 		current = &subV
 	}
