@@ -1,7 +1,7 @@
 ![](https://i.imgur.com/OhtkhbJ.png)
 
 <div align="center">
-  <h1>SSOReady</h1>
+  <h1>SSOSebby</h1>
   <a href="https://github.com/ssoready/ssoready-typescript"><img src="https://img.shields.io/npm/v/ssoready.svg?style=flat&color=ECDC68" /></a>
   <a href="https://github.com/ssoready/ssoready-python"><img src="https://img.shields.io/pypi/v/ssoready.svg?style=flat" /></a>
   <a href="https://github.com/ssoready/ssoready-go"><img src="https://img.shields.io/github/v/tag/ssoready/ssoready-go?style=flat&label=golang&color=%23007D9C" /></a>
@@ -26,10 +26,10 @@
   <hr />
 </div>
 
-## What is SSOReady?
+## What is SSOSebby?
 
-[SSOReady](https://ssoready.com) ([YC
-W24](https://www.ycombinator.com/companies/ssoready)) is an **open-source,
+SSOSebby is a fork of [SSOReady](https://ssoready.com) ([YC
+W24](https://www.ycombinator.com/companies/ssoready)), which is an **open-source,
 straightforward** way to add SAML and SCIM support to your product:
 
 * **[SSOReady SAML](https://ssoready.com/docs/saml/saml-quickstart)**: Everything you need to add SAML ("Enterprise SSO") to your product today.
@@ -38,9 +38,9 @@ straightforward** way to add SAML and SCIM support to your product:
   A hosted UI your customers use to onboard themselves onto SAML and/or
   SCIM.
 
-**With SSOReady, you're in control:**
+**With SSOSebby, you're in control:**
 
-* SSOReady can be used in *any* application, regardless of what stack you use.
+* SSOSebby can be used in *any* application, regardless of what stack you use.
   We provide language-specific SDKs as thin wrappers over a [straightforward
   HTTP
   API](https://ssoready.com/docs/api-reference/saml/redeem-saml-access-code):
@@ -51,20 +51,13 @@ straightforward** way to add SAML and SCIM support to your product:
   * [SSOReady-C#](https://github.com/ssoready/ssoready-csharp)
   * [SSOReady-Ruby](https://github.com/ssoready/ssoready-ruby)
   * [SSOReady-PHP](https://github.com/ssoready/ssoready-php)
-* SSOReady is just an authentication middleware layer. SSOReady doesn’t "own" your users or require any changes to your users database.
-* You can use our cloud-hosted instance or [self-host yourself](https://ssoready.com/docs/self-hosting-ssoready), with the Enterprise plan giving you SLA'd support either way. 
+* SSOReady is just an authentication middleware layer. SSOSebby doesn’t "own" your users or require any changes to your users database.
+* You can [self-host yourself](https://ssoready.com/docs/self-hosting-ssoready).
 
-**SSOReady can be extended with these products, available on the [Enterprise plan](https://ssoready.com/pricing):**
-
-* [Custom Domains & Branding](https://ssoready.com/docs/ssoready-concepts/environments#custom-domains): Run
-  SSOReady on a domain you control, and make your entire SAML/SCIM experience on-brand. 
-* [Management API](https://ssoready.com/docs/management-api): Completely automate everything about SAML
-  and SCIM programmatically at scale.
-* [Enterprise Support](https://ssoready.com/pricing): SLA'd support, including for self-hosted deployments.
 
 ## Getting started
 
-The fastest way to get started with SSOReady is to follow the quickstart for
+The fastest way to get started with SSOSebby is to follow the quickstart for
 what you want to add support for:
 
 * [SAML Quickstart](https://ssoready.com/docs/saml/saml-quickstart)
@@ -73,9 +66,9 @@ what you want to add support for:
 Most folks implement SAML and SCIM in an afternoon. It only takes two lines of
 code.
 
-## How SSOReady works
+## How SSOSebby works
 
-This section provides a high-level overview of how SSOReady works, and how it's possible to implement SAML and SCIM in
+This section provides a high-level overview of how SSOSebby works, and how it's possible to implement SAML and SCIM in
 just an afternoon. For a more thorough introduction, visit the [SAML
 quickstart](https://ssoready.com/docs/saml/saml-quickstart) or the [SCIM
 quickstart](https://ssoready.com/docs/scim/scim-quickstart).
@@ -103,7 +96,7 @@ You can use whatever your preferred ID is for organizations (you might call them
 `organizationExternalId`. You configure those IDs inside SSOReady, and SSOReady handles keeping track of that
 organization's SAML and SCIM settings.
 
-To handle logins, you'll use SSOReady's [Redeem SAML Access
+To handle logins, you'll use SSOSebby's [Redeem SAML Access
 Code](https://ssoready.com/docs/api-reference/saml/redeem-saml-access-code) endpoint:
 
 ```typescript
@@ -115,13 +108,13 @@ const { email, organizationExternalId } = await ssoready.saml.redeemSamlAccessCo
 // log the user in as `email` inside `organizationExternalId`...
 ```
 
-You configure the URL for your `/ssoready-callback` endpoint in SSOReady.
+You configure the URL for your `/ssoready-callback` endpoint in SSOSebby.
 
 ### SCIM in one line of code
 
 SCIM (aka "Enterprise directory sync") is basically a way for you to get a list of your customer's employees offline.
 
-To get a customer's employees, you'll use SSOReady's [List SCIM
+To get a customer's employees, you'll use SSOSebby's [List SCIM
 Users](https://ssoready.com/docs/api-reference/scim/list-scim-users) endpoint:
 
 ```typescript
@@ -156,5 +149,4 @@ misbehave.
 
 ## Security
 
-If you have a security issue to report, please contact us at
-security@ssoready.com.
+If you have a security issue to report, please contact me.
