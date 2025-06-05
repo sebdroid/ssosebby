@@ -4,7 +4,7 @@ import React from "react";
 export function Title({ title }: { title?: string }) {
   return (
     <Helmet>
-      {title ? <title>{title} | SSOReady</title> : <title>SSOReady</title>}
+      {title ? <title>{title} | SSOSebby</title> : <title>SSOSebby</title>}
     </Helmet>
   );
 }
