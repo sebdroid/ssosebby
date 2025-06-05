@@ -85,6 +85,7 @@ jobs:
           images: ghcr.io/${{ github.repository_owner }}/ssosebby-auth
           tags: |
             type=sha
+            type=semver,pattern={{version}}
 
       - name: Build and push Docker image
         id: push
@@ -131,6 +132,7 @@ jobs:
           images: ghcr.io/${{ github.repository_owner }}/ssosebby-migrate
           tags: |
             type=sha
+            type=semver,pattern={{version}}
 
       - name: Build and push Docker image
         id: push
@@ -177,6 +179,7 @@ jobs:
           images: ghcr.io/${{ github.repository_owner }}/ssosebby-app
           tags: |
             type=sha
+            type=semver,pattern={{version}}
 
       - name: Build and push Docker image
         id: push
@@ -223,6 +226,7 @@ jobs:
           images: ghcr.io/${{ github.repository_owner }}/ssosebby-admin
           tags: |
             type=sha
+            type=semver,pattern={{version}}
 
       - name: Build and push Docker image
         id: push
