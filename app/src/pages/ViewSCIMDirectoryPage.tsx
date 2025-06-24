@@ -264,7 +264,7 @@ export function ViewSCIMDirectoryPage() {
               To set up SCIM, your customer's IT admin will need to configure a
               Bearer authentication token in their Identity Provider. You can
               generate these here. You can only view a bearer token immediately
-              after creating it; SSOReady only stores a hash.
+              after creating it; SSOSebby only stores a hash.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -361,8 +361,8 @@ function EditSCIMDirectoryAlertDialog({
                     </FormControl>
                     <FormDescription>
                       Every organization can have one primary SCIM directory.
-                      When you use SSOReady's API, you can list SCIM users or
-                      groups by organization; when you do that, SSOReady will
+                      When you use SSOSebby's API, you can list SCIM users or
+                      groups by organization; when you do that, SSOSebby will
                       return data for the primary SCIM directory in that
                       organization.
                     </FormDescription>
@@ -537,7 +537,7 @@ function RequestsCard() {
           <DocsLink to="https://ssoready.com/docs/ssoready-concepts/scim-request-logs" />
         </CardTitle>
         <CardDescription>
-          SCIM requests your customer's IDP has issued to SSOReady, and how we
+          SCIM requests your customer's IDP has issued to SSOSebby, and how we
           responded.
         </CardDescription>
       </CardHeader>

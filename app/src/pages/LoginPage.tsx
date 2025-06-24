@@ -60,7 +60,7 @@ export function LoginPage() {
                 <CardTitle>Check your email</CardTitle>
               </CardHeader>
               <CardContent className="text-sm">
-                You'll receive an email from SSOReady with a login link shortly.
+                You'll receive an email from SSOSebby with a login link shortly.
               </CardContent>
             </Card>
           </div>
@@ -71,18 +71,18 @@ export function LoginPage() {
               <div className="relative z-20 flex items-center text-lg font-medium">
                 <img
                   src="/logo.svg"
-                  alt="SSOReady Logo"
+                  alt="SSOSebby Logo"
                   width="24"
                   height="24"
                 />
-                <span className="ml-2">SSOReady</span>
+                <span className="ml-2">SSOSebby</span>
               </div>
             </div>
             <div className="lg:p-8 h-full flex items-center">
               <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
                 <div className="flex flex-col space-y-2 text-center">
                   <h1 className="text-2xl font-semibold tracking-tight">
-                    Log in / sign up to SSOReady
+                    Log in / sign up to SSOSebby
                   </h1>
                   <p className="text-sm text-muted-foreground">
                     Enter your email below to continue

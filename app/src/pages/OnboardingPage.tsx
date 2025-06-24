@@ -259,7 +259,7 @@ function DemoCard({
       <CardHeader>
         <CardTitle>
           <div className="flex gap-x-4 items-center">
-            <span>Try a SSOReady-powered SAML login</span>
+            <span>Try a SSOSebby-powered SAML login</span>
             {done && <CheckCircleIcon className="h-6 w-6 text-green-700" />}
           </div>
         </CardTitle>
@@ -335,7 +335,7 @@ function DemoLogin({
             <div className="text-sm mt-2">
               Testing SAML "for real" requires setting up something like Okta,
               Google Workspace, or Microsoft Entra. For demo purposes, we at
-              SSOReady designed a free, fake alternative to those products.
+              SSOSebby designed a free, fake alternative to those products.
             </div>
             <div className="text-sm mt-2">
               It's called DummyIDP, and this demo uses it instead of making you
@@ -487,7 +487,7 @@ function StartLoginCard({
             <p className="mb-4 text-sm">
               In the demo above, the "Log in with SSO" button redirected your
               user to their company's Identity Provider. You get that URL by
-              calling SSOReady's "get SAML redirect URL" endpoint.
+              calling SSOSebby's "get SAML redirect URL" endpoint.
             </p>
 
             <div className="rounded-lg overflow-hidden border">

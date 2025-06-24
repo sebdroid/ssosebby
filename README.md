@@ -9,8 +9,8 @@
   <a href="https://github.com/ssoready/ssoready-csharp"><img src="https://img.shields.io/nuget/v/SSOReady.Client?style=flat&color=004880" /></a>
   <a href="https://github.com/ssoready/ssoready-ruby"><img src="https://img.shields.io/gem/v/ssoready?style=flat&color=EE3F2D" /></a>
   <a href="https://github.com/ssoready/ssoready-php"><img src="https://img.shields.io/packagist/v/ssoready/ssoready?style=flat&color=F28D1A" /></a>
-  <a href="https://github.com/ssoready/ssoready/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" /></a>
-  <a href="https://github.com/ssoready/ssoready/stargazers"><img src="https://img.shields.io/github/stars/ssoready/ssoready?style=flat&logo=github&color=white" /></a>
+  <a href="https://github.com/sebdroid/ssosebby/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" /></a>
+  <a href="https://github.com/sebdroid/ssosebby/stargazers"><img src="https://img.shields.io/github/stars/sebdroid/ssosebby?style=flat&logo=github&color=white" /></a>
   <br />
   <br />
   <a href="https://ssoready.com/docs/saml/saml-quickstart">SAML Quickstart</a>

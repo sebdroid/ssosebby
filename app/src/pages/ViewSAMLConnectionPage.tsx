@@ -167,7 +167,7 @@ export function ViewSAMLConnectionPage() {
             <DocsLink to="https://ssoready.com/docs/ssoready-concepts/saml-connections#service-provider-configuration" />
           </CardTitle>
           <CardDescription>
-            The configuration here is assigned automatically by SSOReady, and
+            The configuration here is assigned automatically by SSOSebby, and
             needs to be inputted into your customer's Identity Provider by their
             IT admin.
           </CardDescription>
@@ -353,7 +353,7 @@ function EditSAMLConnectionAlertDialog({
                     <FormDescription>
                       Every organization can have one primary SAML connection.
                       If you start a SAML login and provide only an
-                      organization, SSOReady uses the primary connection.
+                      organization, SSOSebby uses the primary connection.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
