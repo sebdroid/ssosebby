@@ -536,7 +536,7 @@ function EditOrganizationAlertDialog({
                     <FormDescription>
                       An optional unique identifier for this organization. This
                       is returned in the SAML Redeem endpoint. Use this to more
-                      easily tie an SSOReady organization to its counterpart in
+                      easily tie an SSOSebby organization to its counterpart in
                       your application.
                     </FormDescription>
                     <FormMessage />
@@ -554,7 +554,7 @@ function EditOrganizationAlertDialog({
                       <InputTags {...field} />
                     </FormControl>
                     <FormDescription>
-                      SSOReady will only allow SAML logins from users whose
+                      SSOSebby will only allow SAML logins from users whose
                       email are in this list of domains.
                     </FormDescription>
                     <FormMessage />

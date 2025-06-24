@@ -91,7 +91,7 @@ export function ViewSCIMRequestPage() {
 
               <CardDescription>
                 A SCIM request log is a record of a SCIM HTTP request sent by
-                your customer's identity provider to SSOReady, and how SSOReady
+                your customer's identity provider to SSOSebby, and how SSOSebby
                 responded.
                 <DocsLink to="https://ssoready.com/docs/ssoready-concepts/scim-request-logs" />
               </CardDescription>
@@ -119,13 +119,13 @@ export function ViewSCIMRequestPage() {
         <Alert variant="destructive" className="bg-white shadow-sm">
           <OctagonX className="h-4 w-4" />
           <AlertTitle>
-            This SCIM HTTP request was rejected by SSOReady
+            This SCIM HTTP request was rejected by SSOSebby
           </AlertTitle>
 
           {scimRequest.scimRequest.error.case === "badBearerToken" && (
             <AlertDescription>
               <p>
-                This request had an incorrect bearer token. SSOReady could not
+                This request had an incorrect bearer token. SSOSebby could not
                 authenticate that this request really came from your customer's
                 identity provider.
                 <DocsLink to="https://ssoready.com/docs/ssoready-concepts/scim-request-logs#bad-bearer-token" />
@@ -159,7 +159,7 @@ export function ViewSCIMRequestPage() {
                 <span className="font-semibold">
                   {scimRequest.scimRequest.error.value || "(No value)"}
                 </span>
-                , which is invalid. SSOReady requires that SCIM usernames be
+                , which is invalid. SSOSebby requires that SCIM usernames be
                 email addresses.
                 <DocsLink to="https://ssoready.com/docs/ssoready-concepts/scim-request-logs#bad-username" />
               </p>
@@ -191,7 +191,7 @@ export function ViewSCIMRequestPage() {
           </CardTitle>
           <CardDescription>
             Details about the SCIM HTTP request. This was sent from your
-            customer's identity provider to SSOReady.
+            customer's identity provider to SSOSebby.
           </CardDescription>
         </CardHeader>
 
@@ -218,7 +218,7 @@ export function ViewSCIMRequestPage() {
             <DocsLink to="https://ssoready.com/docs/ssoready-concepts/scim-request-logs#http-response-details" />
           </CardTitle>
           <CardDescription>
-            Details about the SCIM HTTP response. This was SSOReady's reply to
+            Details about the SCIM HTTP response. This was SSOSebby's reply to
             your customer's identity provider.
           </CardDescription>
         </CardHeader>

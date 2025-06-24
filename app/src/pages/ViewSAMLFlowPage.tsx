@@ -225,13 +225,13 @@ export function ViewSAMLFlowPage() {
       {samlFlow?.error.case && (
         <Alert variant="destructive" className="bg-white shadow-sm">
           <OctagonX className="h-4 w-4" />
-          <AlertTitle>This SAML flow was rejected by SSOReady</AlertTitle>
+          <AlertTitle>This SAML flow was rejected by SSOSebby</AlertTitle>
 
           {samlFlow.error.case === "samlConnectionNotConfigured" && (
             <AlertDescription>
               <p>
                 You haven't finished configuring the SAML connection. Without an
-                IDP Entity ID, IDP Redirect URL, and IDP Certificate, SSOReady
+                IDP Entity ID, IDP Redirect URL, and IDP Certificate, SSOSebby
                 cannot securely authenticate SAML logins.
               </p>
 
@@ -285,7 +285,7 @@ export function ViewSAMLFlowPage() {
 
               <p className="mt-4">
                 Your customer's IT admin needs to enable assertion signing. They
-                may have enable signing of the entire SAML response; SSOReady
+                may have enable signing of the entire SAML response; SSOSebby
                 requires specifically the assertion be signed.
               </p>
             </AlertDescription>
@@ -343,7 +343,7 @@ export function ViewSAMLFlowPage() {
                 Your customer's identity provider provided a SAML signature
                 algorithm of{" "}
                 <span className="font-semibold">{samlFlow.error.value}</span>,
-                which SSOReady does not accept.
+                which SSOSebby does not accept.
               </p>
 
               <p className="mt-4">
@@ -363,7 +363,7 @@ export function ViewSAMLFlowPage() {
                 Your customer's identity provider provided a SAML digest
                 algorithm of{" "}
                 <span className="font-semibold">{samlFlow.error.value}</span>,
-                which SSOReady does not accept.
+                which SSOSebby does not accept.
               </p>
 
               <p className="mt-4">

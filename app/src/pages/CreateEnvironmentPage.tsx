@@ -132,7 +132,7 @@ export function CreateEnvironmentPage() {
                     <FormDescription>
                       After a SAML login, your users get redirected to this
                       address. You usually want to point this at an
-                      SSOReady-specific page on your web application.
+                      SSOSebby-specific page on your web application.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -159,7 +159,7 @@ export function CreateEnvironmentPage() {
                       >
                         SAML-over-OAuth
                       </a>
-                      . This is the URL SSOReady will redirect your users back
+                      . This is the URL SSOSebby will redirect your users back
                       to after they log in with SAML-over-OAuth.
                     </FormDescription>
                     <FormMessage />

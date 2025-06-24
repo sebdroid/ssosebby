@@ -77,7 +77,7 @@ export function ViewBrandingSettingsPage() {
             </div>
           </div>
           <CardDescription>
-            SSOReady can host a UI on your behalf that lets your customers
+            SSOSebby can host a UI on your behalf that lets your customers
             configure their SAML and SCIM settings on their own. Here, you can
             make that UI look on-brand for your company.
             <DocsLink to="https://ssoready.com/docs/ssoready-concepts/environments#custom-branding" />

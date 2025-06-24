@@ -96,8 +96,8 @@ function ListAPIKeysCard() {
               <CardTitle>API Keys</CardTitle>
 
               <CardDescription>
-                An API key is how your application authenticates with SSOReady's
-                SDKs or REST APIs. Most SSOReady users should use these over
+                An API key is how your application authenticates with SSOSebby's
+                SDKs or REST APIs. Most SSOSebby users should use these over
                 SAML OAuth Clients.
                 <DocsLink to="https://ssoready.com/docs/ssoready-concepts/environments#api-keys" />
               </CardDescription>
@@ -415,7 +415,7 @@ function ListOAuthClientsCard() {
               <CardDescription>
                 A SAML OAuth client is a way to add SAML support to an app that
                 exclusively uses OAuth to do user logins. Use these if
-                interacting directly with SSOReady using an API Key isn't an
+                interacting directly with SSOSebby using an API Key isn't an
                 option for you.
                 <DocsLink to="https://ssoready.com/docs/saml-over-oauth-saml-nextauth-integration" />
               </CardDescription>

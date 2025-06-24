@@ -125,7 +125,7 @@ export function ViewEnvironmentPage() {
             <div className="text-sm col-span-2 text-muted-foreground flex items-center gap-x-2">
               Redirect URL
               <InfoTooltip>
-                Where SSOReady will redirect your users after they log in via
+                Where SSOSebby will redirect your users after they log in via
                 SAML.
                 <DocsLink to="https://ssoready.com/docs/ssoready-concepts/environments#redirect-url" />
               </InfoTooltip>
@@ -134,7 +134,7 @@ export function ViewEnvironmentPage() {
             <div className="text-sm col-span-2 text-muted-foreground flex items-center gap-x-2">
               OAuth Redirect URI
               <InfoTooltip>
-                Where SSOReady will redirect your users if you use
+                Where SSOSebby will redirect your users if you use
                 SAML-over-OAuth.
                 <DocsLink to="https://ssoready.com/docs/ssoready-concepts/environments#oauth-redirect-uri" />
               </InfoTooltip>
@@ -353,7 +353,7 @@ function EditEnvironmentAlertDialog({
                     <FormDescription>
                       After a SAML login, your users get redirected to this
                       address. You usually want to point this at an
-                      SSOReady-specific page on your web application.
+                      SSOSebby-specific page on your web application.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -374,7 +374,7 @@ function EditEnvironmentAlertDialog({
                     </FormControl>
                     <FormDescription>
                       If you're using SAML OAuth clients to integrate with
-                      SSOReady, this is the URL your users get redirected to
+                      SSOSebby, this is the URL your users get redirected to
                       after signing in.
                     </FormDescription>
                     <FormMessage />
@@ -497,7 +497,7 @@ function CreateOrganizationAlertDialog({
                     <FormDescription>
                       An optional unique identifier for this organization. This
                       is returned in the SAML Redeem endpoint. Use this to more
-                      easily tie an SSOReady organization to its counterpart in
+                      easily tie an SSOSebby organization to its counterpart in
                       your application.
                     </FormDescription>
                     <FormMessage />
@@ -515,7 +515,7 @@ function CreateOrganizationAlertDialog({
                       <InputTags {...field} />
                     </FormControl>
                     <FormDescription>
-                      SSOReady will only allow SAML logins from users whose
+                      SSOSebby will only allow SAML logins from users whose
                       email are in this list of domains.
                     </FormDescription>
                     <FormMessage />

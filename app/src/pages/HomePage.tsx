@@ -55,7 +55,7 @@ export function HomePage() {
       {/*    <CardHeader>*/}
       {/*      <CardTitle>Add SAML support this afternoon</CardTitle>*/}
       {/*      <CardDescription>*/}
-      {/*        Our interactive onboarding flow shows you how SSOReady works, and*/}
+      {/*        Our interactive onboarding flow shows you how SSOSebby works, and*/}
       {/*        how you'll integrate it in your product.*/}
       {/*      </CardDescription>*/}
       {/*    </CardHeader>*/}
@@ -81,7 +81,7 @@ export function HomePage() {
       {/*) : (*/}
       <Card>
         <CardHeader>
-          <CardTitle>Welcome to SSOReady</CardTitle>
+          <CardTitle>Welcome to SSOSebby</CardTitle>
         </CardHeader>
 
         <CardContent>

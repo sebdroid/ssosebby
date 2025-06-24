@@ -7,7 +7,7 @@
     "dev:admin": "cd admin && npm run dev"
   },
   "dependencies": {
-    "@bufbuild/buf": "^1.54.0",
+    "@bufbuild/buf": "^1.55.1",
     "@bufbuild/protoc-gen-es": "^1.10.1",
     "@connectrpc/protoc-gen-connect-es": "^1.6.1",
     "@connectrpc/protoc-gen-connect-query": "^1.4.2",
