@@ -1,4 +1,4 @@
-module github.com/sebdroid/ssosebby
+module github.com/sebdroid/ssosebby/v1
 
 go 1.24.4
 
