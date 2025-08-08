@@ -73,3 +73,9 @@ require (
 	golang.org/x/time v0.12.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+retract (
+	v1.0.0
+	v0.2.0
+	v0.1.0
+)
