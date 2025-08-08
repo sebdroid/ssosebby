@@ -48,7 +48,7 @@ export function ViewAPIKeyPage() {
               </div>
 
               <CardDescription>
-                An API key is how your application authenticates with SSOReady's
+                An API key is how your application authenticates with SSOSebby's
                 SDKs or REST APIs.
                 <DocsLink to="https://ssoready.com/docs/ssoready-concepts/environments#api-keys" />
               </CardDescription>

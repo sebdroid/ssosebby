@@ -24,6 +24,7 @@ func Init(req *InitRequest) *InitResponse {
 	samlReq.Version = "2.0"
 	samlReq.IssueInstant = req.Now.UTC().Truncate(time.Millisecond)
 	samlReq.Issuer.Name = req.SPEntityID
+	samlReq.ForceAuthn = true
 	samlReqData, err := xml.Marshal(samlReq)
 
 	if err != nil {
@@ -45,4 +46,5 @@ type samlRequest struct {
 		XMLName xml.Name `xml:"urn:oasis:names:tc:SAML:2.0:assertion Issuer"`
 		Name    string   `xml:",chardata"`
 	} `xml:"Issuer"`
+	ForceAuthn bool `xml:"ForceAuthn,attr,omitempty"`
 }

@@ -2110,7 +2110,7 @@ function CompleteStep() {
         className="fixed bottom-16 left-1/2 transform -translate-x-1/2 flex items-center gap-x-2 grayscale hover:grayscale-0"
       >
         <img src="/apple-touch-icon.png" alt="" className="h-4" />
-        <span className="text-xs text-gray-500">Powered by SSOReady</span>
+        <span className="text-xs text-gray-500">Powered by SSOSebby</span>
       </a>
     </>
   );
