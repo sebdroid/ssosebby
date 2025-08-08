@@ -7,10 +7,10 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/ssoready/ssoready/internal/authn"
-	ssoreadyv1 "github.com/ssoready/ssoready/internal/gen/ssoready/v1"
-	"github.com/ssoready/ssoready/internal/store/idformat"
-	"github.com/ssoready/ssoready/internal/store/queries"
+	"github.com/sebdroid/ssosebby/internal/authn"
+	ssoreadyv1 "github.com/sebdroid/ssosebby/internal/gen/ssoready/v1"
+	"github.com/sebdroid/ssosebby/internal/store/idformat"
+	"github.com/sebdroid/ssosebby/internal/store/queries"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 

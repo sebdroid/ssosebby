@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ssoready/ssoready/internal/saml/samltypes"
+	"github.com/sebdroid/ssosebby/internal/saml/samltypes"
 )
 
 type ParseMetadataResponse struct {

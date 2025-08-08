@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	"github.com/ssoready/ssoready/internal/authn"
-	"github.com/ssoready/ssoready/internal/store"
+	"github.com/sebdroid/ssosebby/internal/authn"
+	"github.com/sebdroid/ssosebby/internal/store"
 )
 
 var skipRPCs = []string{

@@ -13,9 +13,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/ssoready/ssoready/internal/authn"
-	"github.com/ssoready/ssoready/internal/store/idformat"
-	"github.com/ssoready/ssoready/internal/store/queries"
+	"github.com/sebdroid/ssosebby/internal/authn"
+	"github.com/sebdroid/ssosebby/internal/store/idformat"
+	"github.com/sebdroid/ssosebby/internal/store/queries"
 )
 
 // todo break this code out from api's store layer, because the auth model is completely different

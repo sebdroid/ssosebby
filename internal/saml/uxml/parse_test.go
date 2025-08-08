@@ -1,9 +1,10 @@
 package uxml_test
 
 import (
-	"github.com/ssoready/ssoready/internal/saml/uxml"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/sebdroid/ssosebby/internal/saml/uxml"
+	"github.com/stretchr/testify/assert"
 )
 
 func textNode(s string) uxml.Node {

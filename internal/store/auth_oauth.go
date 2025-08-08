@@ -7,8 +7,8 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
-	"github.com/ssoready/ssoready/internal/store/idformat"
-	"github.com/ssoready/ssoready/internal/store/queries"
+	"github.com/sebdroid/ssosebby/internal/store/idformat"
+	"github.com/sebdroid/ssosebby/internal/store/queries"
 )
 
 type AuthOAuthGetClientRequest struct {

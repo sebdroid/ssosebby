@@ -8,7 +8,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/getsentry/sentry-go"
 	"github.com/google/uuid"
-	"github.com/ssoready/ssoready/internal/authn"
+	"github.com/sebdroid/ssosebby/internal/authn"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/ssoready/ssoready/internal/saml/sortattr"
-	"github.com/ssoready/ssoready/internal/saml/uxml"
-	"github.com/ssoready/ssoready/internal/saml/uxml/stack"
+	"github.com/sebdroid/ssosebby/internal/saml/sortattr"
+	"github.com/sebdroid/ssosebby/internal/saml/uxml"
+	"github.com/sebdroid/ssosebby/internal/saml/uxml/stack"
 )
 
 func Canonicalize(n uxml.Node, inclusiveNamespaces []string) ([]byte, error) {

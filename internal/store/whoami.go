@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ssoready/ssoready/internal/authn"
-	ssoreadyv1 "github.com/ssoready/ssoready/internal/gen/ssoready/v1"
-	"github.com/ssoready/ssoready/internal/store/idformat"
-	"github.com/ssoready/ssoready/internal/store/queries"
+	"github.com/sebdroid/ssosebby/internal/authn"
+	ssoreadyv1 "github.com/sebdroid/ssosebby/internal/gen/ssoready/v1"
+	"github.com/sebdroid/ssosebby/internal/store/idformat"
+	"github.com/sebdroid/ssosebby/internal/store/queries"
 )
 
 func (s *Store) Whoami(ctx context.Context, req *ssoreadyv1.WhoamiRequest) (*ssoreadyv1.WhoamiResponse, error) {

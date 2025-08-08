@@ -18,13 +18,13 @@ import (
 	sentryhttp "github.com/getsentry/sentry-go/http"
 	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/sebdroid/ssosebby/internal/authservice"
+	"github.com/sebdroid/ssosebby/internal/hexkey"
+	"github.com/sebdroid/ssosebby/internal/pagetoken"
+	"github.com/sebdroid/ssosebby/internal/secretload"
+	"github.com/sebdroid/ssosebby/internal/slogcorrelation"
+	"github.com/sebdroid/ssosebby/internal/store"
 	"github.com/ssoready/conf"
-	"github.com/ssoready/ssoready/internal/authservice"
-	"github.com/ssoready/ssoready/internal/hexkey"
-	"github.com/ssoready/ssoready/internal/pagetoken"
-	"github.com/ssoready/ssoready/internal/secretload"
-	"github.com/ssoready/ssoready/internal/slogcorrelation"
-	"github.com/ssoready/ssoready/internal/store"
 )
 
 func main() {

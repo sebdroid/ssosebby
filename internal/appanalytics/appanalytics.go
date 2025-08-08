@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"connectrpc.com/connect"
+	"github.com/sebdroid/ssosebby/internal/authn"
 	"github.com/segmentio/analytics-go/v3"
-	"github.com/ssoready/ssoready/internal/authn"
 )
 
 func NewInterceptor(client analytics.Client) connect.UnaryInterceptorFunc {

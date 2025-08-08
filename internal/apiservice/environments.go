@@ -5,9 +5,9 @@ import (
 	"fmt"
 
 	"connectrpc.com/connect"
+	"github.com/sebdroid/ssosebby/internal/appanalytics"
+	ssoreadyv1 "github.com/sebdroid/ssosebby/internal/gen/ssoready/v1"
 	"github.com/segmentio/analytics-go/v3"
-	"github.com/ssoready/ssoready/internal/appanalytics"
-	ssoreadyv1 "github.com/ssoready/ssoready/internal/gen/ssoready/v1"
 )
 
 func (s *Service) ListEnvironments(ctx context.Context, req *connect.Request[ssoreadyv1.ListEnvironmentsRequest]) (*connect.Response[ssoreadyv1.ListEnvironmentsResponse], error) {

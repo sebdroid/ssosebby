@@ -3,7 +3,7 @@ package scimpatch_test
 import (
 	"testing"
 
-	"github.com/ssoready/ssoready/internal/scimpatch"
+	"github.com/sebdroid/ssosebby/internal/scimpatch"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

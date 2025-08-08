@@ -13,8 +13,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go"
-	ssoreadyv1 "github.com/ssoready/ssoready/internal/gen/ssoready/v1"
-	"github.com/ssoready/ssoready/internal/saml"
+	ssoreadyv1 "github.com/sebdroid/ssosebby/internal/gen/ssoready/v1"
+	"github.com/sebdroid/ssosebby/internal/saml"
 )
 
 func (s *Service) AppGetAdminSettings(ctx context.Context, req *connect.Request[ssoreadyv1.AppGetAdminSettingsRequest]) (*connect.Response[ssoreadyv1.AppGetAdminSettingsResponse], error) {

@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ssoready/ssoready/internal/saml/dsig"
-	"github.com/ssoready/ssoready/internal/saml/samltypes"
+	"github.com/sebdroid/ssosebby/internal/saml/dsig"
+	"github.com/sebdroid/ssosebby/internal/saml/samltypes"
 )
 
 type ValidateRequest struct {

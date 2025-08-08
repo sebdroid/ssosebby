@@ -10,8 +10,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ssoready/ssoready/internal/saml/c14n"
-	"github.com/ssoready/ssoready/internal/saml/uxml"
+	"github.com/sebdroid/ssosebby/internal/saml/c14n"
+	"github.com/sebdroid/ssosebby/internal/saml/uxml"
 )
 
 var (

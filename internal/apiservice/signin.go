@@ -8,11 +8,11 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/resend/resend-go/v2"
+	"github.com/sebdroid/ssosebby/internal/appanalytics"
+	ssoreadyv1 "github.com/sebdroid/ssosebby/internal/gen/ssoready/v1"
+	"github.com/sebdroid/ssosebby/internal/google"
+	"github.com/sebdroid/ssosebby/internal/store"
 	"github.com/segmentio/analytics-go/v3"
-	"github.com/ssoready/ssoready/internal/appanalytics"
-	ssoreadyv1 "github.com/ssoready/ssoready/internal/gen/ssoready/v1"
-	"github.com/ssoready/ssoready/internal/google"
-	"github.com/ssoready/ssoready/internal/store"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 

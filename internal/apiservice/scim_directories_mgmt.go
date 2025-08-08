@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"connectrpc.com/connect"
-	ssoreadyv1 "github.com/ssoready/ssoready/internal/gen/ssoready/v1"
+	ssoreadyv1 "github.com/sebdroid/ssosebby/internal/gen/ssoready/v1"
 )
 
 func (s *Service) ListSCIMDirectories(ctx context.Context, req *connect.Request[ssoreadyv1.ListSCIMDirectoriesRequest]) (*connect.Response[ssoreadyv1.ListSCIMDirectoriesResponse], error) {

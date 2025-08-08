@@ -12,10 +12,10 @@ import (
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/ssoready/ssoready/internal/authn"
-	"github.com/ssoready/ssoready/internal/microsoft"
-	"github.com/ssoready/ssoready/internal/store/idformat"
-	"github.com/ssoready/ssoready/internal/store/queries"
+	"github.com/sebdroid/ssosebby/internal/authn"
+	"github.com/sebdroid/ssosebby/internal/microsoft"
+	"github.com/sebdroid/ssosebby/internal/store/idformat"
+	"github.com/sebdroid/ssosebby/internal/store/queries"
 )
 
 type GetAppSessionRequest struct {

@@ -20,10 +20,10 @@ import (
 	"connectrpc.com/connect"
 
 	"github.com/gorilla/mux"
-	"github.com/ssoready/ssoready/internal/emailaddr"
-	"github.com/ssoready/ssoready/internal/saml"
-	"github.com/ssoready/ssoready/internal/statesign"
-	"github.com/ssoready/ssoready/internal/store"
+	"github.com/sebdroid/ssosebby/internal/emailaddr"
+	"github.com/sebdroid/ssosebby/internal/saml"
+	"github.com/sebdroid/ssosebby/internal/statesign"
+	"github.com/sebdroid/ssosebby/internal/store"
 )
 
 type acsTemplateData struct {

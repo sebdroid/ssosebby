@@ -16,14 +16,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ssoready/ssoready/internal/scimpatch"
+	"github.com/sebdroid/ssosebby/internal/scimpatch"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/gorilla/mux"
-	"github.com/ssoready/ssoready/internal/emailaddr"
-	ssoreadyv1 "github.com/ssoready/ssoready/internal/gen/ssoready/v1"
-	"github.com/ssoready/ssoready/internal/store"
+	"github.com/sebdroid/ssosebby/internal/emailaddr"
+	ssoreadyv1 "github.com/sebdroid/ssosebby/internal/gen/ssoready/v1"
+	"github.com/sebdroid/ssosebby/internal/store"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 

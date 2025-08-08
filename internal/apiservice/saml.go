@@ -7,8 +7,8 @@ import (
 	"net/http"
 
 	"connectrpc.com/connect"
-	ssoreadyv1 "github.com/ssoready/ssoready/internal/gen/ssoready/v1"
-	"github.com/ssoready/ssoready/internal/saml"
+	ssoreadyv1 "github.com/sebdroid/ssosebby/internal/gen/ssoready/v1"
+	"github.com/sebdroid/ssosebby/internal/saml"
 )
 
 func (s *Service) GetSAMLRedirectURL(ctx context.Context, req *connect.Request[ssoreadyv1.GetSAMLRedirectURLRequest]) (*connect.Response[ssoreadyv1.GetSAMLRedirectURLResponse], error) {
