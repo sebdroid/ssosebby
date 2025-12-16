@@ -124,6 +124,58 @@ func (s *Store) AuthListSCIMUsers(ctx context.Context, req *AuthListSCIMUsersReq
 	}, nil
 }
 
+type AuthListSCIMUsersByActiveRequest struct {
+	SCIMDirectoryID string
+	Active          bool
+	StartIndex      int
+}
+
+type AuthListSCIMUsersByActiveResponse struct {
+	TotalResults int
+	SCIMUsers    []*ssoreadyv1.SCIMUser
+}
+
+func (s *Store) AuthListSCIMUsersByActive(ctx context.Context, req *AuthListSCIMUsersByActiveRequest) (*AuthListSCIMUsersByActiveResponse, error) {
+	scimDirID, err := idformat.SCIMDirectory.Parse(req.SCIMDirectoryID)
+	if err != nil {
+		return nil, fmt.Errorf("parse scim directory id: %w", err)
+	}
+
+	_, q, _, rollback, err := s.tx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("tx: %w", err)
+	}
+	defer rollback()
+
+	count, err := q.AuthCountSCIMUsersByActive(ctx, queries.AuthCountSCIMUsersByActiveParams{
+		ScimDirectoryID: scimDirID,
+		Active:          req.Active,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("count scim users by active: %w", err)
+	}
+
+	qSCIMUsers, err := q.AuthListSCIMUsersByActive(ctx, queries.AuthListSCIMUsersByActiveParams{
+		ScimDirectoryID: scimDirID,
+		Active:          req.Active,
+		Offset:          int32(req.StartIndex),
+		Limit:           10,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list scim users by active: %w", err)
+	}
+
+	var scimUsers []*ssoreadyv1.SCIMUser
+	for _, qSCIMUser := range qSCIMUsers {
+		scimUsers = append(scimUsers, parseSCIMUser(qSCIMUser))
+	}
+
+	return &AuthListSCIMUsersByActiveResponse{
+		TotalResults: int(count),
+		SCIMUsers:    scimUsers,
+	}, nil
+}
+
 type AuthGetSCIMUserByEmailRequest struct {
 	SCIMDirectoryID string
 	Email           string
@@ -147,6 +199,34 @@ func (s *Store) AuthGetSCIMUserByEmail(ctx context.Context, req *AuthGetSCIMUser
 		}
 
 		return nil, fmt.Errorf("get scim user by email: %w", err)
+	}
+
+	return parseSCIMUser(qSCIMUser), nil
+}
+
+type AuthGetSCIMUserByEmailAndActiveRequest struct {
+	SCIMDirectoryID string
+	Email           string
+	Active          bool
+}
+
+func (s *Store) AuthGetSCIMUserByEmailAndActive(ctx context.Context, req *AuthGetSCIMUserByEmailAndActiveRequest) (*ssoreadyv1.SCIMUser, error) {
+	scimDirID, err := idformat.SCIMDirectory.Parse(req.SCIMDirectoryID)
+	if err != nil {
+		return nil, fmt.Errorf("parse scim directory id: %w", err)
+	}
+
+	qSCIMUser, err := s.q.AuthGetSCIMUserByEmailAndActive(ctx, queries.AuthGetSCIMUserByEmailAndActiveParams{
+		ScimDirectoryID: scimDirID,
+		Email:           req.Email,
+		Active:          req.Active,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrSCIMUserNotFound
+		}
+
+		return nil, fmt.Errorf("get scim user by email and active: %w", err)
 	}
 
 	return parseSCIMUser(qSCIMUser), nil
@@ -289,7 +369,6 @@ func (s *Store) AuthUpdateSCIMUser(ctx context.Context, req *AuthUpdateSCIMUserR
 		ID:              scimUserID,
 		ScimDirectoryID: scimDirID,
 		Email:           req.SCIMUser.Email,
-		Deleted:         req.SCIMUser.Deleted,
 		Attributes:      attrs,
 	})
 	if err != nil {

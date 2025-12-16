@@ -651,6 +651,30 @@ where scim_directory_id = $1
   and email = $2
   and deleted = false;
 
+-- name: AuthGetSCIMUserByEmailAndActive :one
+select *
+from scim_users
+where scim_directory_id = $1
+  and email = $2
+  and deleted = false
+  and (attributes->>'active')::boolean = sqlc.arg(active)::boolean;
+
+-- name: AuthCountSCIMUsersByActive :one
+select count(*)
+from scim_users
+where scim_directory_id = $1
+  and deleted = false
+  and (attributes->>'active')::boolean = sqlc.arg(active)::boolean;
+
+-- name: AuthListSCIMUsersByActive :many
+select *
+from scim_users
+where scim_directory_id = $1
+  and deleted = false
+  and (attributes->>'active')::boolean = sqlc.arg(active)::boolean
+order by id
+offset $2 limit $3;
+
 -- name: AuthGetSCIMUser :one
 select *
 from scim_users
@@ -674,10 +698,10 @@ returning *;
 -- name: AuthUpdateSCIMUser :one
 update scim_users
 set email      = $1,
-    attributes = $2,
-    deleted    = $5
+    attributes = $2
 where scim_directory_id = $3
   and id = $4
+  and deleted = false
 returning *;
 
 -- name: AuthUpdateSCIMUserEmail :one
