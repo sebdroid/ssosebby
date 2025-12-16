@@ -630,20 +630,6 @@ from scim_directories
 where id = $1
   and bearer_token_sha256 = $2;
 
--- name: AuthCountSCIMUsers :one
-select count(*)
-from scim_users
-where scim_directory_id = $1
-  and deleted = false;
-
--- name: AuthListSCIMUsers :many
-select *
-from scim_users
-where scim_directory_id = $1
-  and deleted = false
-order by id
-offset $2 limit $3;
-
 -- name: AuthGetSCIMUserByEmail :one
 select *
 from scim_users
@@ -658,22 +644,6 @@ where scim_directory_id = $1
   and email = $2
   and deleted = false
   and (attributes->>'active')::boolean = sqlc.arg(active)::boolean;
-
--- name: AuthCountSCIMUsersByActive :one
-select count(*)
-from scim_users
-where scim_directory_id = $1
-  and deleted = false
-  and (attributes->>'active')::boolean = sqlc.arg(active)::boolean;
-
--- name: AuthListSCIMUsersByActive :many
-select *
-from scim_users
-where scim_directory_id = $1
-  and deleted = false
-  and (attributes->>'active')::boolean = sqlc.arg(active)::boolean
-order by id
-offset $2 limit $3;
 
 -- name: AuthGetSCIMUser :one
 select *
@@ -716,36 +686,6 @@ update scim_users
 set deleted = true
 where id = $1
 returning *;
-
--- name: AuthCountSCIMGroups :one
-select count(*)
-from scim_groups
-where scim_directory_id = $1
-  and deleted = false;
-
--- name: AuthListSCIMGroups :many
-select *
-from scim_groups
-where scim_directory_id = $1
-  and deleted = false
-order by id
-offset $2 limit $3;
-
--- name: AuthCountSCIMGroupsByDisplayName :one
-select count(*)
-from scim_groups
-where scim_directory_id = $1
-  and deleted = false
-  and display_name = $2;
-
--- name: AuthListSCIMGroupsByDisplayName :many
-select *
-from scim_groups
-where scim_directory_id = $1
-  and deleted = false
-  and display_name = $2
-order by id
-offset $3 limit $4;
 
 -- name: AuthGetSCIMGroup :one
 select *

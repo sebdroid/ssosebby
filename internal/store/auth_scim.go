@@ -21,6 +21,13 @@ import (
 
 var ErrNoSuchSCIMDirectory = errors.New("no such scim directory")
 
+// DefaultSCIMPageSize is the default number of results returned per page when count is not specified.
+// Per RFC 7644 section 3.4.2.4, the service provider establishes its own maximum when count is not specified.
+const DefaultSCIMPageSize = 10
+
+// MaxSCIMPageSize is the maximum allowed page size for SCIM list operations.
+const MaxSCIMPageSize = 200
+
 func (s *Store) AuthCheckSCIMDirectoryExists(ctx context.Context, scimDirectoryID string) error {
 	scimDirID, err := idformat.SCIMDirectory.Parse(scimDirectoryID)
 	if err != nil {
@@ -79,109 +86,11 @@ func (s *Store) AuthSCIMVerifyBearerToken(ctx context.Context, scimDirectoryID, 
 	return nil
 }
 
-type AuthListSCIMUsersRequest struct {
-	SCIMDirectoryID string
-	StartIndex      int
-}
-
-type AuthListSCIMUsersResponse struct {
-	TotalResults int
-	SCIMUsers    []*ssoreadyv1.SCIMUser
-}
-
-func (s *Store) AuthListSCIMUsers(ctx context.Context, req *AuthListSCIMUsersRequest) (*AuthListSCIMUsersResponse, error) {
-	scimDirID, err := idformat.SCIMDirectory.Parse(req.SCIMDirectoryID)
-	if err != nil {
-		return nil, fmt.Errorf("parse scim directory id: %w", err)
-	}
-
-	_, q, _, rollback, err := s.tx(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("tx: %w", err)
-	}
-	defer rollback()
-
-	count, err := q.AuthCountSCIMUsers(ctx, scimDirID)
-	if err != nil {
-		return nil, fmt.Errorf("count scim users: %w", err)
-	}
-
-	qSCIMUsers, err := q.AuthListSCIMUsers(ctx, queries.AuthListSCIMUsersParams{
-		ScimDirectoryID: scimDirID,
-		Offset:          int32(req.StartIndex),
-		Limit:           10,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("list scim users: %w", err)
-	}
-
-	var scimUsers []*ssoreadyv1.SCIMUser
-	for _, qSCIMUser := range qSCIMUsers {
-		scimUsers = append(scimUsers, parseSCIMUser(qSCIMUser))
-	}
-
-	return &AuthListSCIMUsersResponse{
-		TotalResults: int(count),
-		SCIMUsers:    scimUsers,
-	}, nil
-}
-
-type AuthListSCIMUsersByActiveRequest struct {
-	SCIMDirectoryID string
-	Active          bool
-	StartIndex      int
-}
-
-type AuthListSCIMUsersByActiveResponse struct {
-	TotalResults int
-	SCIMUsers    []*ssoreadyv1.SCIMUser
-}
-
-func (s *Store) AuthListSCIMUsersByActive(ctx context.Context, req *AuthListSCIMUsersByActiveRequest) (*AuthListSCIMUsersByActiveResponse, error) {
-	scimDirID, err := idformat.SCIMDirectory.Parse(req.SCIMDirectoryID)
-	if err != nil {
-		return nil, fmt.Errorf("parse scim directory id: %w", err)
-	}
-
-	_, q, _, rollback, err := s.tx(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("tx: %w", err)
-	}
-	defer rollback()
-
-	count, err := q.AuthCountSCIMUsersByActive(ctx, queries.AuthCountSCIMUsersByActiveParams{
-		ScimDirectoryID: scimDirID,
-		Active:          req.Active,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("count scim users by active: %w", err)
-	}
-
-	qSCIMUsers, err := q.AuthListSCIMUsersByActive(ctx, queries.AuthListSCIMUsersByActiveParams{
-		ScimDirectoryID: scimDirID,
-		Active:          req.Active,
-		Offset:          int32(req.StartIndex),
-		Limit:           10,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("list scim users by active: %w", err)
-	}
-
-	var scimUsers []*ssoreadyv1.SCIMUser
-	for _, qSCIMUser := range qSCIMUsers {
-		scimUsers = append(scimUsers, parseSCIMUser(qSCIMUser))
-	}
-
-	return &AuthListSCIMUsersByActiveResponse{
-		TotalResults: int(count),
-		SCIMUsers:    scimUsers,
-	}, nil
-}
-
 type AuthListSCIMUsersFilteredRequest struct {
 	SCIMDirectoryID string
 	Filter          string
 	StartIndex      int
+	Count           int // Per RFC 7644 3.4.2.4: desired max results per page. 0 = return only totalResults, -1 = use default
 }
 
 type AuthListSCIMUsersFilteredResponse struct {
@@ -224,6 +133,20 @@ func (s *Store) AuthListSCIMUsersFiltered(ctx context.Context, req *AuthListSCIM
 		return nil, fmt.Errorf("count filtered scim users: %w", err)
 	}
 
+	// Per RFC 7644 3.4.2.4: count=0 means return only totalResults
+	if req.Count == 0 {
+		return &AuthListSCIMUsersFilteredResponse{
+			TotalResults: int(count),
+			SCIMUsers:    nil,
+		}, nil
+	}
+
+	// Determine effective limit: negative means use default, otherwise cap at max
+	limit := DefaultSCIMPageSize
+	if req.Count > 0 {
+		limit = min(req.Count, MaxSCIMPageSize)
+	}
+
 	// List query
 	listBuilder := psql.Select("id", "scim_directory_id", "email", "deleted", "attributes").
 		From("scim_users").
@@ -231,7 +154,7 @@ func (s *Store) AuthListSCIMUsersFiltered(ctx context.Context, req *AuthListSCIM
 		Where(sq.Eq{"deleted": false}).
 		OrderBy("id").
 		Offset(uint64(req.StartIndex)).
-		Limit(10)
+		Limit(uint64(limit))
 	if parsedFilter.Where != nil {
 		listBuilder = listBuilder.Where(parsedFilter.Where)
 	}
@@ -560,90 +483,11 @@ func (s *Store) AuthDeleteSCIMUser(ctx context.Context, req *AuthDeleteSCIMUserR
 	return nil
 }
 
-type AuthListSCIMGroupsRequest struct {
-	SCIMDirectoryID   string
-	StartIndex        int
-	FilterDisplayName string
-}
-
-type AuthListSCIMGroupsResponse struct {
-	TotalResults int
-	SCIMGroups   []*ssoreadyv1.SCIMGroup
-}
-
-func (s *Store) AuthListSCIMGroups(ctx context.Context, req *AuthListSCIMGroupsRequest) (*AuthListSCIMGroupsResponse, error) {
-	scimDirID, err := idformat.SCIMDirectory.Parse(req.SCIMDirectoryID)
-	if err != nil {
-		return nil, fmt.Errorf("parse scim directory id: %w", err)
-	}
-
-	_, q, _, rollback, err := s.tx(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("tx: %w", err)
-	}
-	defer rollback()
-
-	var count int64
-	if req.FilterDisplayName == "" {
-		c, err := q.AuthCountSCIMGroups(ctx, scimDirID)
-		if err != nil {
-			return nil, fmt.Errorf("count scim groups: %w", err)
-		}
-
-		count = c
-	} else {
-		c, err := q.AuthCountSCIMGroupsByDisplayName(ctx, queries.AuthCountSCIMGroupsByDisplayNameParams{
-			ScimDirectoryID: scimDirID,
-			DisplayName:     req.FilterDisplayName,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("count scim groups: %w", err)
-		}
-
-		count = c
-	}
-
-	var qSCIMGroups []queries.ScimGroup
-	if req.FilterDisplayName == "" {
-		qGroups, err := q.AuthListSCIMGroups(ctx, queries.AuthListSCIMGroupsParams{
-			ScimDirectoryID: scimDirID,
-			Offset:          int32(req.StartIndex),
-			Limit:           10,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("list scim groups: %w", err)
-		}
-
-		qSCIMGroups = qGroups
-	} else {
-		qGroups, err := q.AuthListSCIMGroupsByDisplayName(ctx, queries.AuthListSCIMGroupsByDisplayNameParams{
-			ScimDirectoryID: scimDirID,
-			DisplayName:     req.FilterDisplayName,
-			Offset:          int32(req.StartIndex),
-			Limit:           10,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("list scim groups by display name: %w", err)
-		}
-
-		qSCIMGroups = qGroups
-	}
-
-	var scimGroups []*ssoreadyv1.SCIMGroup
-	for _, qSCIMGroup := range qSCIMGroups {
-		scimGroups = append(scimGroups, parseSCIMGroup(qSCIMGroup))
-	}
-
-	return &AuthListSCIMGroupsResponse{
-		TotalResults: int(count),
-		SCIMGroups:   scimGroups,
-	}, nil
-}
-
 type AuthListSCIMGroupsFilteredRequest struct {
 	SCIMDirectoryID string
 	Filter          string
 	StartIndex      int
+	Count           int // Per RFC 7644 3.4.2.4: desired max results per page. 0 = return only totalResults, -1 = use default
 }
 
 type AuthListSCIMGroupsFilteredResponse struct {
@@ -684,6 +528,20 @@ func (s *Store) AuthListSCIMGroupsFiltered(ctx context.Context, req *AuthListSCI
 		return nil, fmt.Errorf("count filtered scim groups: %w", err)
 	}
 
+	// Per RFC 7644 3.4.2.4: count=0 means return only totalResults
+	if req.Count == 0 {
+		return &AuthListSCIMGroupsFilteredResponse{
+			TotalResults: int(count),
+			SCIMGroups:   nil,
+		}, nil
+	}
+
+	// Determine effective limit: negative means use default, otherwise cap at max
+	limit := DefaultSCIMPageSize
+	if req.Count > 0 {
+		limit = min(req.Count, MaxSCIMPageSize)
+	}
+
 	// List query
 	listBuilder := psql.Select("id", "scim_directory_id", "display_name", "deleted", "attributes").
 		From("scim_groups").
@@ -691,7 +549,7 @@ func (s *Store) AuthListSCIMGroupsFiltered(ctx context.Context, req *AuthListSCI
 		Where(sq.Eq{"deleted": false}).
 		OrderBy("id").
 		Offset(uint64(req.StartIndex)).
-		Limit(10)
+		Limit(uint64(limit))
 	if parsedFilter.Where != nil {
 		listBuilder = listBuilder.Where(parsedFilter.Where)
 	}

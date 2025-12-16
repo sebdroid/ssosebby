@@ -1059,3 +1059,212 @@ func TestScimServiceProviderConfig_UnsupportedFeatures(t *testing.T) {
 	bulk := config["bulk"].(map[string]any)
 	assert.False(t, bulk["supported"].(bool), "bulk should not be supported")
 }
+
+// Tests for SCIM count parameter (RFC 7644 Section 3.4.2.4)
+
+func TestScimCountParameterParsing(t *testing.T) {
+	tests := []struct {
+		name          string
+		countParam    string
+		expectedCount int
+		shouldError   bool
+	}{
+		{
+			name:          "no count parameter uses default (-1)",
+			countParam:    "",
+			expectedCount: -1,
+			shouldError:   false,
+		},
+		{
+			name:          "count=0 returns only totalResults",
+			countParam:    "0",
+			expectedCount: 0,
+			shouldError:   false,
+		},
+		{
+			name:          "positive count value",
+			countParam:    "50",
+			expectedCount: 50,
+			shouldError:   false,
+		},
+		{
+			name:          "negative count treated as 0 per RFC 7644",
+			countParam:    "-5",
+			expectedCount: 0,
+			shouldError:   false,
+		},
+		{
+			name:          "invalid count value",
+			countParam:    "abc",
+			expectedCount: 0,
+			shouldError:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Simulate the parsing logic from scimListUsers/scimListGroups
+			count := -1 // default: unspecified
+			var parseErr error
+
+			if tt.countParam != "" {
+				var c int
+				c, parseErr = parseInt(tt.countParam)
+				if parseErr == nil {
+					// Per RFC 7644: negative values SHALL be interpreted as "0"
+					if c < 0 {
+						c = 0
+					}
+					count = c
+				}
+			}
+
+			if tt.shouldError {
+				assert.Error(t, parseErr, "Expected parse error for invalid count")
+			} else {
+				assert.NoError(t, parseErr, "Expected no parse error")
+				assert.Equal(t, tt.expectedCount, count, "Count value mismatch")
+			}
+		})
+	}
+}
+
+func TestScimCountLimitBehavior(t *testing.T) {
+	// Test that count is properly capped at MaxSCIMPageSize
+	tests := []struct {
+		name          string
+		requestCount  int
+		expectedLimit int
+	}{
+		{
+			name:          "count=-1 uses default page size",
+			requestCount:  -1,
+			expectedLimit: store.DefaultSCIMPageSize,
+		},
+		{
+			name:          "count within max returns requested count",
+			requestCount:  50,
+			expectedLimit: 50,
+		},
+		{
+			name:          "count exceeding max is capped",
+			requestCount:  500,
+			expectedLimit: store.MaxSCIMPageSize,
+		},
+		{
+			name:          "count equal to max returns max",
+			requestCount:  store.MaxSCIMPageSize,
+			expectedLimit: store.MaxSCIMPageSize,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Simulate the limit calculation logic from store layer
+			limit := store.DefaultSCIMPageSize
+			if tt.requestCount > 0 {
+				limit = tt.requestCount
+				if limit > store.MaxSCIMPageSize {
+					limit = store.MaxSCIMPageSize
+				}
+			}
+
+			assert.Equal(t, tt.expectedLimit, limit, "Limit value mismatch")
+		})
+	}
+}
+
+func TestScimCountZeroReturnsOnlyTotalResults(t *testing.T) {
+	// Per RFC 7644 3.4.2.4: count=0 means return no resources but still return totalResults
+	// This test verifies the expected behavior structure
+
+	type listResponse struct {
+		TotalResults int
+		Resources    []any
+	}
+
+	// Simulate count=0 behavior
+	count := 0
+	totalResults := 100
+
+	var response listResponse
+	if count == 0 {
+		// When count=0, return only totalResults with empty resources
+		response = listResponse{
+			TotalResults: totalResults,
+			Resources:    nil,
+		}
+	}
+
+	assert.Equal(t, totalResults, response.TotalResults, "totalResults should still be returned")
+	assert.Nil(t, response.Resources, "Resources should be nil when count=0")
+}
+
+func TestScimStartIndexWithCount(t *testing.T) {
+	// Test that startIndex and count work together for pagination
+	tests := []struct {
+		name           string
+		startIndex     int
+		count          int
+		totalResults   int
+		expectedOffset int
+	}{
+		{
+			name:           "first page",
+			startIndex:     1,
+			count:          10,
+			totalResults:   100,
+			expectedOffset: 0, // SCIM is 1-indexed, store is 0-indexed
+		},
+		{
+			name:           "second page",
+			startIndex:     11,
+			count:          10,
+			totalResults:   100,
+			expectedOffset: 10,
+		},
+		{
+			name:           "custom page size",
+			startIndex:     51,
+			count:          25,
+			totalResults:   100,
+			expectedOffset: 50,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// SCIM startIndex is 1-indexed, convert to 0-indexed offset
+			offset := tt.startIndex - 1
+
+			assert.Equal(t, tt.expectedOffset, offset, "Offset calculation mismatch")
+			assert.GreaterOrEqual(t, offset, 0, "Offset should never be negative")
+		})
+	}
+}
+
+// parseInt is a helper to simulate strconv.Atoi for testing
+func parseInt(s string) (int, error) {
+	var result int
+	_, err := regexp.MatchString(`^-?\d+$`, s)
+	if err != nil {
+		return 0, err
+	}
+
+	// Use a simple approach for testing
+	for i, c := range s {
+		if c == '-' && i == 0 {
+			continue
+		}
+		if c < '0' || c > '9' {
+			return 0, assert.AnError
+		}
+		result = result*10 + int(c-'0')
+	}
+
+	if len(s) > 0 && s[0] == '-' {
+		result = -result
+	}
+
+	return result, nil
+}

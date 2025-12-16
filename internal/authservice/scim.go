@@ -58,58 +58,47 @@ func (s *Service) scimListUsers(w http.ResponseWriter, r *http.Request) error {
 		startIndex = i - 1 // scim is 1-indexed, store is 0-indexed
 	}
 
-	if r.URL.Query().Has("filter") {
-		filter := r.URL.Query().Get("filter")
-
-		// Use unified filter parsing - supports RFC 7644 compliant filters
-		// including: eq, ne, co, sw, ew, pr, gt, lt, ge, le, and, or, not
-		scimUsers, err := s.Store.AuthListSCIMUsersFiltered(ctx, &store.AuthListSCIMUsersFilteredRequest{
-			SCIMDirectoryID: scimDirectoryID,
-			Filter:          filter,
-			StartIndex:      startIndex,
-		})
+	// parse count per RFC 7644 3.4.2.4
+	// -1 means unspecified (use default), 0 means return only totalResults, negative values treated as 0
+	count := -1 // default: unspecified, let store use default
+	if r.URL.Query().Has("count") {
+		c, err := strconv.Atoi(r.URL.Query().Get("count"))
 		if err != nil {
-			if errors.Is(err, store.ErrInvalidSCIMFilter) {
-				// Return SCIM-compliant error for invalid filter
-				w.Header().Set("Content-Type", "application/scim+json")
-				w.WriteHeader(http.StatusBadRequest)
-				if err := json.NewEncoder(w).Encode(map[string]any{
-					"schemas":  []string{"urn:ietf:params:scim:api:messages:2.0:Error"},
-					"scimType": "invalidFilter",
-					"detail":   err.Error(),
-					"status":   400,
-				}); err != nil {
-					panic(err)
-				}
-				return nil
-			}
-			panic(fmt.Errorf("store: %w", err))
+			http.Error(w, fmt.Sprintf("parse count: %s", err), http.StatusBadRequest)
+			return nil
 		}
-
-		resources := []any{}
-		for _, scimUser := range scimUsers.SCIMUsers {
-			resources = append(resources, scimUserToResource(scimUser))
+		// Per RFC 7644: negative values SHALL be interpreted as "0"
+		if c < 0 {
+			c = 0
 		}
-
-		w.Header().Set("Content-Type", "application/scim+json")
-		w.WriteHeader(http.StatusOK)
-		if err := json.NewEncoder(w).Encode(scimListResponse{
-			TotalResults: scimUsers.TotalResults,
-			ItemsPerPage: len(resources),
-			StartIndex:   startIndex + 1, // convert back to 1-indexed for response
-			Schemas:      []string{"urn:ietf:params:scim:api:messages:2.0:ListResponse"},
-			Resources:    resources,
-		}); err != nil {
-			panic(err)
-		}
-		return nil
+		count = c
 	}
 
-	scimUsers, err := s.Store.AuthListSCIMUsers(ctx, &store.AuthListSCIMUsersRequest{
+	// Use unified filter parsing - supports RFC 7644 compliant filters
+	// including: eq, ne, co, sw, ew, pr, gt, lt, ge, le, and, or, not
+	// Empty filter string is handled gracefully (returns all users)
+	filter := r.URL.Query().Get("filter")
+	scimUsers, err := s.Store.AuthListSCIMUsersFiltered(ctx, &store.AuthListSCIMUsersFilteredRequest{
 		SCIMDirectoryID: scimDirectoryID,
+		Filter:          filter,
 		StartIndex:      startIndex,
+		Count:           count,
 	})
 	if err != nil {
+		if errors.Is(err, store.ErrInvalidSCIMFilter) {
+			// Return SCIM-compliant error for invalid filter
+			w.Header().Set("Content-Type", "application/scim+json")
+			w.WriteHeader(http.StatusBadRequest)
+			if err := json.NewEncoder(w).Encode(map[string]any{
+				"schemas":  []string{"urn:ietf:params:scim:api:messages:2.0:Error"},
+				"scimType": "invalidFilter",
+				"detail":   err.Error(),
+				"status":   400,
+			}); err != nil {
+				panic(err)
+			}
+			return nil
+		}
 		panic(fmt.Errorf("store: %w", err))
 	}
 
@@ -123,7 +112,7 @@ func (s *Service) scimListUsers(w http.ResponseWriter, r *http.Request) error {
 	if err := json.NewEncoder(w).Encode(scimListResponse{
 		TotalResults: scimUsers.TotalResults,
 		ItemsPerPage: len(resources),
-		StartIndex:   startIndex,
+		StartIndex:   startIndex + 1, // convert back to 1-indexed for response
 		Schemas:      []string{"urn:ietf:params:scim:api:messages:2.0:ListResponse"},
 		Resources:    resources,
 	}); err != nil {
@@ -475,46 +464,46 @@ func (s *Service) scimListGroups(w http.ResponseWriter, r *http.Request) error {
 		startIndex = i - 1 // scim is 1-indexed, store is 0-indexed
 	}
 
-	// Use unified filter parsing if filter is present, otherwise list all
-	var scimGroups *store.AuthListSCIMGroupsFilteredResponse
-	var err error
+	// parse count per RFC 7644 3.4.2.4
+	// -1 means unspecified (use default), 0 means return only totalResults, negative values treated as 0
+	count := -1 // default: unspecified, let store use default
+	if r.URL.Query().Has("count") {
+		c, err := strconv.Atoi(r.URL.Query().Get("count"))
+		if err != nil {
+			http.Error(w, fmt.Sprintf("parse count: %s", err), http.StatusBadRequest)
+			return nil
+		}
+		// Per RFC 7644: negative values SHALL be interpreted as "0"
+		if c < 0 {
+			c = 0
+		}
+		count = c
+	}
 
-	if r.URL.Query().Has("filter") {
-		filter := r.URL.Query().Get("filter")
-		scimGroups, err = s.Store.AuthListSCIMGroupsFiltered(ctx, &store.AuthListSCIMGroupsFilteredRequest{
-			SCIMDirectoryID: scimDirectoryID,
-			Filter:          filter,
-			StartIndex:      startIndex,
-		})
-		if err != nil {
-			if errors.Is(err, store.ErrInvalidSCIMFilter) {
-				w.Header().Set("Content-Type", "application/scim+json")
-				w.WriteHeader(http.StatusBadRequest)
-				if err := json.NewEncoder(w).Encode(map[string]any{
-					"schemas":  []string{"urn:ietf:params:scim:api:messages:2.0:Error"},
-					"scimType": "invalidFilter",
-					"detail":   err.Error(),
-					"status":   400,
-				}); err != nil {
-					panic(err)
-				}
-				return nil
+	// Use unified filter parsing - supports RFC 7644 compliant filters
+	// Empty filter string is handled gracefully (returns all groups)
+	filter := r.URL.Query().Get("filter")
+	scimGroups, err := s.Store.AuthListSCIMGroupsFiltered(ctx, &store.AuthListSCIMGroupsFilteredRequest{
+		SCIMDirectoryID: scimDirectoryID,
+		Filter:          filter,
+		StartIndex:      startIndex,
+		Count:           count,
+	})
+	if err != nil {
+		if errors.Is(err, store.ErrInvalidSCIMFilter) {
+			w.Header().Set("Content-Type", "application/scim+json")
+			w.WriteHeader(http.StatusBadRequest)
+			if err := json.NewEncoder(w).Encode(map[string]any{
+				"schemas":  []string{"urn:ietf:params:scim:api:messages:2.0:Error"},
+				"scimType": "invalidFilter",
+				"detail":   err.Error(),
+				"status":   400,
+			}); err != nil {
+				panic(err)
 			}
-			panic(fmt.Errorf("store: %w", err))
+			return nil
 		}
-	} else {
-		// No filter - list all groups
-		resp, err := s.Store.AuthListSCIMGroups(ctx, &store.AuthListSCIMGroupsRequest{
-			SCIMDirectoryID: scimDirectoryID,
-			StartIndex:      startIndex,
-		})
-		if err != nil {
-			panic(fmt.Errorf("store: %w", err))
-		}
-		scimGroups = &store.AuthListSCIMGroupsFilteredResponse{
-			TotalResults: resp.TotalResults,
-			SCIMGroups:   resp.SCIMGroups,
-		}
+		panic(fmt.Errorf("store: %w", err))
 	}
 
 	resources := []any{} // intentionally initialized to avoid returning `null` instead of `[]`
@@ -531,7 +520,7 @@ func (s *Service) scimListGroups(w http.ResponseWriter, r *http.Request) error {
 	if err := json.NewEncoder(w).Encode(scimListResponse{
 		TotalResults: scimGroups.TotalResults,
 		ItemsPerPage: len(resources),
-		StartIndex:   startIndex,
+		StartIndex:   startIndex + 1, // convert back to 1-indexed for response
 		Schemas:      []string{"urn:ietf:params:scim:schemas:core:2.0:Group"},
 		Resources:    resources,
 	}); err != nil {
