@@ -1611,12 +1611,19 @@ func (s *Service) scimGetResourceType(w http.ResponseWriter, r *http.Request) er
 	return nil
 }
 
-// copySchemaWithLocation creates a copy of a schema with the correct location URL
+// copySchemaWithLocation creates a deep copy of a schema with the correct location URL.
+// Deep copy is necessary to prevent concurrent modification issues and ensure
+// the original schema remains unchanged.
 func copySchemaWithLocation(schema map[string]any, baseURL string) map[string]any {
-	// Create a shallow copy
-	result := make(map[string]any)
-	for k, v := range schema {
-		result[k] = v
+	// Deep copy via JSON marshal/unmarshal to handle nested maps and slices
+	data, err := json.Marshal(schema)
+	if err != nil {
+		panic(fmt.Errorf("marshal schema for deep copy: %w", err))
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal(data, &result); err != nil {
+		panic(fmt.Errorf("unmarshal schema for deep copy: %w", err))
 	}
 
 	// Update meta with correct location
