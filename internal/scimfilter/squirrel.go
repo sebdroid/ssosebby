@@ -213,7 +213,7 @@ func (c *squirrelConverter) userAttributeToColumn(attrName, subAttr string) (str
 		return "(attributes->>'active')::boolean", nil
 	case "name":
 		if subAttr != "" {
-			return fmt.Sprintf("(attributes->'name'->>'%s')", subAttr), nil
+			return fmt.Sprintf("(attributes->'name'->>'%s')", escapeJsonbKey(subAttr)), nil
 		}
 		return "(attributes->>'name')", nil
 	case "displayname":
@@ -235,9 +235,9 @@ func (c *squirrelConverter) userAttributeToColumn(attrName, subAttr string) (str
 		return "(attributes->>'emails')", nil
 	default:
 		if subAttr != "" {
-			return fmt.Sprintf("(attributes->'%s'->>'%s')", attrName, subAttr), nil
+			return fmt.Sprintf("(attributes->'%s'->>'%s')", escapeJsonbKey(attrName), escapeJsonbKey(subAttr)), nil
 		}
-		return fmt.Sprintf("(attributes->>'%s')", attrName), nil
+		return fmt.Sprintf("(attributes->>'%s')", escapeJsonbKey(attrName)), nil
 	}
 }
 
@@ -251,8 +251,8 @@ func (c *squirrelConverter) groupAttributeToColumn(attrName, subAttr string) (st
 		return "(attributes->>'externalId')", nil
 	default:
 		if subAttr != "" {
-			return fmt.Sprintf("(attributes->'%s'->>'%s')", attrName, subAttr), nil
+			return fmt.Sprintf("(attributes->'%s'->>'%s')", escapeJsonbKey(attrName), escapeJsonbKey(subAttr)), nil
 		}
-		return fmt.Sprintf("(attributes->>'%s')", attrName), nil
+		return fmt.Sprintf("(attributes->>'%s')", escapeJsonbKey(attrName)), nil
 	}
 }

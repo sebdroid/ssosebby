@@ -51,3 +51,9 @@ func escapePattern(s string) string {
 	s = strings.ReplaceAll(s, "_", "\\_")
 	return s
 }
+
+// escapeJsonbKey escapes single quotes in JSONB key names for defense-in-depth.
+// This provides an additional security layer beyond regex validation.
+func escapeJsonbKey(s string) string {
+	return strings.ReplaceAll(s, "'", "''")
+}
