@@ -10,8 +10,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -63,137 +61,44 @@ func (s *Service) scimListUsers(w http.ResponseWriter, r *http.Request) error {
 	if r.URL.Query().Has("filter") {
 		filter := r.URL.Query().Get("filter")
 
-		// parse filter components - supports "and" compound filters
-		var filterEmail *string
-		var filterActive *bool
-
-		// extract active filter: active eq true/false or active eq "true"/"false"
-		filterActivePat := regexp.MustCompile(`active eq (true|false|"true"|"false")`)
-		if match := filterActivePat.FindStringSubmatch(filter); match != nil {
-			activeValue := strings.Trim(match[1], `"`)
-			active := activeValue == "true"
-			filterActive = &active
-		}
-
-		// extract email/userName filter
-		filterEmailPat := regexp.MustCompile(`(userName|email\.value) eq "(.*?)"`)
-		if match := filterEmailPat.FindStringSubmatch(filter); match != nil {
-			// scimvalidator.microsoft.com sends url-encoded values; harmless to "normal" emails to url-parse them
-			email, err := url.QueryUnescape(match[2])
-			if err != nil {
-				panic(err)
-			}
-			filterEmail = &email
-		}
-
-		// must have at least one supported filter
-		if filterEmail == nil && filterActive == nil {
-			panic("unsupported filter param")
-		}
-
-		// handle combined email + active filter
-		if filterEmail != nil && filterActive != nil {
-			scimUser, err := s.Store.AuthGetSCIMUserByEmailAndActive(ctx, &store.AuthGetSCIMUserByEmailAndActiveRequest{
-				SCIMDirectoryID: scimDirectoryID,
-				Email:           *filterEmail,
-				Active:          *filterActive,
-			})
-			if err != nil {
-				if errors.Is(err, store.ErrSCIMUserNotFound) {
-					w.Header().Set("Content-Type", "application/scim+json")
-					w.WriteHeader(http.StatusOK)
-					if err := json.NewEncoder(w).Encode(scimListResponse{
-						TotalResults: 0,
-						ItemsPerPage: 1,
-						StartIndex:   1,
-						Schemas:      []string{"urn:ietf:params:scim:api:messages:2.0:ListResponse"},
-						Resources:    []any{},
-					}); err != nil {
-						panic(err)
-					}
-					return nil
-				}
-				panic(err)
-			}
-
-			resource := scimUserToResource(scimUser)
-			w.Header().Set("Content-Type", "application/scim+json")
-			w.WriteHeader(http.StatusOK)
-			if err := json.NewEncoder(w).Encode(scimListResponse{
-				TotalResults: 1,
-				ItemsPerPage: 1,
-				StartIndex:   1,
-				Schemas:      []string{"urn:ietf:params:scim:api:messages:2.0:ListResponse"},
-				Resources:    []any{resource},
-			}); err != nil {
-				panic(err)
-			}
-			return nil
-		}
-
-		// handle active-only filter
-		if filterActive != nil {
-			scimUsers, err := s.Store.AuthListSCIMUsersByActive(ctx, &store.AuthListSCIMUsersByActiveRequest{
-				SCIMDirectoryID: scimDirectoryID,
-				Active:          *filterActive,
-				StartIndex:      startIndex,
-			})
-			if err != nil {
-				panic(fmt.Errorf("store: %w", err))
-			}
-
-			resources := []any{}
-			for _, scimUser := range scimUsers.SCIMUsers {
-				resources = append(resources, scimUserToResource(scimUser))
-			}
-
-			w.Header().Set("Content-Type", "application/scim+json")
-			w.WriteHeader(http.StatusOK)
-			if err := json.NewEncoder(w).Encode(scimListResponse{
-				TotalResults: scimUsers.TotalResults,
-				ItemsPerPage: len(resources),
-				StartIndex:   startIndex + 1, // convert back to 1-indexed for response
-				Schemas:      []string{"urn:ietf:params:scim:api:messages:2.0:ListResponse"},
-				Resources:    resources,
-			}); err != nil {
-				panic(err)
-			}
-			return nil
-		}
-
-		// handle email-only filter
-		scimUser, err := s.Store.AuthGetSCIMUserByEmail(ctx, &store.AuthGetSCIMUserByEmailRequest{
+		// Use unified filter parsing - supports RFC 7644 compliant filters
+		// including: eq, ne, co, sw, ew, pr, gt, lt, ge, le, and, or, not
+		scimUsers, err := s.Store.AuthListSCIMUsersFiltered(ctx, &store.AuthListSCIMUsersFilteredRequest{
 			SCIMDirectoryID: scimDirectoryID,
-			Email:           *filterEmail,
+			Filter:          filter,
+			StartIndex:      startIndex,
 		})
 		if err != nil {
-			if errors.Is(err, store.ErrSCIMUserNotFound) {
+			if errors.Is(err, store.ErrInvalidSCIMFilter) {
+				// Return SCIM-compliant error for invalid filter
 				w.Header().Set("Content-Type", "application/scim+json")
-				w.WriteHeader(http.StatusOK)
-				if err := json.NewEncoder(w).Encode(scimListResponse{
-					TotalResults: 0,
-					ItemsPerPage: 1,
-					StartIndex:   1,
-					Schemas:      []string{"urn:ietf:params:scim:api:messages:2.0:ListResponse"},
-					Resources:    []any{},
+				w.WriteHeader(http.StatusBadRequest)
+				if err := json.NewEncoder(w).Encode(map[string]any{
+					"schemas":  []string{"urn:ietf:params:scim:api:messages:2.0:Error"},
+					"scimType": "invalidFilter",
+					"detail":   err.Error(),
+					"status":   400,
 				}); err != nil {
 					panic(err)
 				}
 				return nil
 			}
-
-			panic(err)
+			panic(fmt.Errorf("store: %w", err))
 		}
 
-		resource := scimUserToResource(scimUser)
+		resources := []any{}
+		for _, scimUser := range scimUsers.SCIMUsers {
+			resources = append(resources, scimUserToResource(scimUser))
+		}
+
 		w.Header().Set("Content-Type", "application/scim+json")
 		w.WriteHeader(http.StatusOK)
 		if err := json.NewEncoder(w).Encode(scimListResponse{
-			TotalResults: 1,
-			ItemsPerPage: 1,
-			StartIndex:   1,
+			TotalResults: scimUsers.TotalResults,
+			ItemsPerPage: len(resources),
+			StartIndex:   startIndex + 1, // convert back to 1-indexed for response
 			Schemas:      []string{"urn:ietf:params:scim:api:messages:2.0:ListResponse"},
-			Resources:    []any{resource},
+			Resources:    resources,
 		}); err != nil {
 			panic(err)
 		}
@@ -405,6 +310,10 @@ func (s *Service) scimUpdateUser(w http.ResponseWriter, r *http.Request) error {
 		},
 	})
 	if err != nil {
+		if errors.Is(err, store.ErrSCIMUserNotFound) {
+			w.WriteHeader(http.StatusNotFound)
+			return nil
+		}
 		return fmt.Errorf("store: %w", err)
 	}
 
@@ -440,7 +349,17 @@ func (s *Service) scimPatchUser(w http.ResponseWriter, r *http.Request) error {
 		SCIMUserID:      scimUserID,
 	})
 	if err != nil {
+		if errors.Is(err, store.ErrSCIMUserNotFound) {
+			w.WriteHeader(http.StatusNotFound)
+			return nil
+		}
 		panic(fmt.Errorf("store: get scim user for patch: %w", err))
+	}
+
+	// Return 404 if user has been deleted
+	if scimUser.Deleted {
+		w.WriteHeader(http.StatusNotFound)
+		return nil
 	}
 
 	// convert scimUser to its SCIM representation
@@ -556,30 +475,46 @@ func (s *Service) scimListGroups(w http.ResponseWriter, r *http.Request) error {
 		startIndex = i - 1 // scim is 1-indexed, store is 0-indexed
 	}
 
-	var filterDisplayName string
+	// Use unified filter parsing if filter is present, otherwise list all
+	var scimGroups *store.AuthListSCIMGroupsFilteredResponse
+	var err error
+
 	if r.URL.Query().Has("filter") {
-		filterDisplayNamePat := regexp.MustCompile(`displayName eq "(.*)"`)
-		match := filterDisplayNamePat.FindStringSubmatch(r.URL.Query().Get("filter"))
-		if match == nil {
-			panic("unsupported filter param")
+		filter := r.URL.Query().Get("filter")
+		scimGroups, err = s.Store.AuthListSCIMGroupsFiltered(ctx, &store.AuthListSCIMGroupsFilteredRequest{
+			SCIMDirectoryID: scimDirectoryID,
+			Filter:          filter,
+			StartIndex:      startIndex,
+		})
+		if err != nil {
+			if errors.Is(err, store.ErrInvalidSCIMFilter) {
+				w.Header().Set("Content-Type", "application/scim+json")
+				w.WriteHeader(http.StatusBadRequest)
+				if err := json.NewEncoder(w).Encode(map[string]any{
+					"schemas":  []string{"urn:ietf:params:scim:api:messages:2.0:Error"},
+					"scimType": "invalidFilter",
+					"detail":   err.Error(),
+					"status":   400,
+				}); err != nil {
+					panic(err)
+				}
+				return nil
+			}
+			panic(fmt.Errorf("store: %w", err))
 		}
-
-		filterDisplayName = match[1]
-	}
-
-	scimGroups, err := s.Store.AuthListSCIMGroups(ctx, &store.AuthListSCIMGroupsRequest{
-		SCIMDirectoryID: scimDirectoryID,
-		StartIndex:      startIndex,
-
-		// Unlike ListUsers, which uses a separate query to list users by email
-		// (an operation that's guaranteed to return only one value), ListGroups
-		// here instead does a more traditional filter, because we do not
-		// enforce group uniqueness by displayName. Multiple values may be
-		// returned even if FilterDisplayName is set.
-		FilterDisplayName: filterDisplayName,
-	})
-	if err != nil {
-		panic(fmt.Errorf("store: %w", err))
+	} else {
+		// No filter - list all groups
+		resp, err := s.Store.AuthListSCIMGroups(ctx, &store.AuthListSCIMGroupsRequest{
+			SCIMDirectoryID: scimDirectoryID,
+			StartIndex:      startIndex,
+		})
+		if err != nil {
+			panic(fmt.Errorf("store: %w", err))
+		}
+		scimGroups = &store.AuthListSCIMGroupsFilteredResponse{
+			TotalResults: resp.TotalResults,
+			SCIMGroups:   resp.SCIMGroups,
+		}
 	}
 
 	resources := []any{} // intentionally initialized to avoid returning `null` instead of `[]`
@@ -904,9 +839,10 @@ func scimUserToResource(scimUser *ssoreadyv1.SCIMUser) map[string]any {
 	r["userName"] = scimUser.Email
 
 	// normalize Entra-style "active" property
-	if r["active"] == "True" {
+	switch r["active"] {
+	case "True":
 		r["active"] = true
-	} else if r["active"] == "False" {
+	case "False":
 		r["active"] = false
 	}
 
@@ -931,9 +867,10 @@ func scimUserFromResource(scimDirectoryID, scimUserID string, r map[string]any) 
 	delete(r, "schemas")
 
 	// normalize Entra-style "active" property
-	if r["active"] == "True" {
+	switch r["active"] {
+	case "True":
 		r["active"] = true
-	} else if r["active"] == "False" {
+	case "False":
 		r["active"] = false
 	}
 

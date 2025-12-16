@@ -145,7 +145,7 @@ func (s *Store) GetSAMLRedirectURL(ctx context.Context, req *ssoreadyv1.GetSAMLR
 type SAMLAccessCodeNotFoundError struct{}
 
 func (e *SAMLAccessCodeNotFoundError) Error() string {
-	return fmt.Sprintf("saml access code not found, or already used")
+	return "saml access code not found, or already used"
 }
 
 func (s *Store) RedeemSAMLAccessCode(ctx context.Context, req *ssoreadyv1.RedeemSAMLAccessCodeRequest) (*ssoreadyv1.RedeemSAMLAccessCodeResponse, error) {

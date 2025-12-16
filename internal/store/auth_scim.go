@@ -7,9 +7,11 @@ import (
 	"errors"
 	"fmt"
 
+	sq "github.com/Masterminds/squirrel"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	ssoreadyv1 "github.com/sebdroid/ssosebby/internal/gen/ssoready/v1"
+	"github.com/sebdroid/ssosebby/internal/scimfilter"
 	"github.com/sebdroid/ssosebby/internal/store/idformat"
 	"github.com/sebdroid/ssosebby/internal/store/queries"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -176,6 +178,94 @@ func (s *Store) AuthListSCIMUsersByActive(ctx context.Context, req *AuthListSCIM
 	}, nil
 }
 
+type AuthListSCIMUsersFilteredRequest struct {
+	SCIMDirectoryID string
+	Filter          string
+	StartIndex      int
+}
+
+type AuthListSCIMUsersFilteredResponse struct {
+	TotalResults int
+	SCIMUsers    []*ssoreadyv1.SCIMUser
+}
+
+var ErrInvalidSCIMFilter = errors.New("store: invalid scim filter")
+
+func (s *Store) AuthListSCIMUsersFiltered(ctx context.Context, req *AuthListSCIMUsersFilteredRequest) (*AuthListSCIMUsersFilteredResponse, error) {
+	scimDirID, err := idformat.SCIMDirectory.Parse(req.SCIMDirectoryID)
+	if err != nil {
+		return nil, fmt.Errorf("parse scim directory id: %w", err)
+	}
+
+	// Parse the SCIM filter to squirrel conditions
+	parsedFilter, err := scimfilter.ParseToSquirrel(req.Filter, scimfilter.ResourceTypeUser)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidSCIMFilter, err)
+	}
+
+	// Build base query with squirrel (uses $1, $2, etc. for PostgreSQL)
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+
+	// Count query
+	countBuilder := psql.Select("count(*)").From("scim_users").
+		Where(sq.Eq{"scim_directory_id": scimDirID}).
+		Where(sq.Eq{"deleted": false})
+	if parsedFilter.Where != nil {
+		countBuilder = countBuilder.Where(parsedFilter.Where)
+	}
+
+	countSQL, countArgs, err := countBuilder.ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("build count query: %w", err)
+	}
+
+	var count int64
+	if err := s.db.QueryRow(ctx, countSQL, countArgs...).Scan(&count); err != nil {
+		return nil, fmt.Errorf("count filtered scim users: %w", err)
+	}
+
+	// List query
+	listBuilder := psql.Select("id", "scim_directory_id", "email", "deleted", "attributes").
+		From("scim_users").
+		Where(sq.Eq{"scim_directory_id": scimDirID}).
+		Where(sq.Eq{"deleted": false}).
+		OrderBy("id").
+		Offset(uint64(req.StartIndex)).
+		Limit(10)
+	if parsedFilter.Where != nil {
+		listBuilder = listBuilder.Where(parsedFilter.Where)
+	}
+
+	listSQL, listArgs, err := listBuilder.ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("build list query: %w", err)
+	}
+
+	rows, err := s.db.Query(ctx, listSQL, listArgs...)
+	if err != nil {
+		return nil, fmt.Errorf("list filtered scim users: %w", err)
+	}
+	defer rows.Close()
+
+	var scimUsers []*ssoreadyv1.SCIMUser
+	for rows.Next() {
+		var qUser queries.ScimUser
+		if err := rows.Scan(&qUser.ID, &qUser.ScimDirectoryID, &qUser.Email, &qUser.Deleted, &qUser.Attributes); err != nil {
+			return nil, fmt.Errorf("scan scim user: %w", err)
+		}
+		scimUsers = append(scimUsers, parseSCIMUser(qUser))
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate scim users: %w", err)
+	}
+
+	return &AuthListSCIMUsersFilteredResponse{
+		TotalResults: int(count),
+		SCIMUsers:    scimUsers,
+	}, nil
+}
+
 type AuthGetSCIMUserByEmailRequest struct {
 	SCIMDirectoryID string
 	Email           string
@@ -284,6 +374,9 @@ func (s *Store) AuthGetSCIMUserIncludeDeleted(ctx context.Context, req *AuthGetS
 		ID:              scimUserID,
 	})
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrSCIMUserNotFound
+		}
 		return nil, fmt.Errorf("get scim user include deleted: %w", err)
 	}
 
@@ -372,7 +465,10 @@ func (s *Store) AuthUpdateSCIMUser(ctx context.Context, req *AuthUpdateSCIMUserR
 		Attributes:      attrs,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("create scim user: %w", err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrSCIMUserNotFound
+		}
+		return nil, fmt.Errorf("update scim user: %w", err)
 	}
 
 	if err := commit(); err != nil {
@@ -539,6 +635,92 @@ func (s *Store) AuthListSCIMGroups(ctx context.Context, req *AuthListSCIMGroupsR
 	}
 
 	return &AuthListSCIMGroupsResponse{
+		TotalResults: int(count),
+		SCIMGroups:   scimGroups,
+	}, nil
+}
+
+type AuthListSCIMGroupsFilteredRequest struct {
+	SCIMDirectoryID string
+	Filter          string
+	StartIndex      int
+}
+
+type AuthListSCIMGroupsFilteredResponse struct {
+	TotalResults int
+	SCIMGroups   []*ssoreadyv1.SCIMGroup
+}
+
+func (s *Store) AuthListSCIMGroupsFiltered(ctx context.Context, req *AuthListSCIMGroupsFilteredRequest) (*AuthListSCIMGroupsFilteredResponse, error) {
+	scimDirID, err := idformat.SCIMDirectory.Parse(req.SCIMDirectoryID)
+	if err != nil {
+		return nil, fmt.Errorf("parse scim directory id: %w", err)
+	}
+
+	// Parse the SCIM filter to squirrel conditions
+	parsedFilter, err := scimfilter.ParseToSquirrel(req.Filter, scimfilter.ResourceTypeGroup)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidSCIMFilter, err)
+	}
+
+	// Build base query with squirrel
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+
+	// Count query
+	countBuilder := psql.Select("count(*)").From("scim_groups").
+		Where(sq.Eq{"scim_directory_id": scimDirID}).
+		Where(sq.Eq{"deleted": false})
+	if parsedFilter.Where != nil {
+		countBuilder = countBuilder.Where(parsedFilter.Where)
+	}
+
+	countSQL, countArgs, err := countBuilder.ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("build count query: %w", err)
+	}
+
+	var count int64
+	if err := s.db.QueryRow(ctx, countSQL, countArgs...).Scan(&count); err != nil {
+		return nil, fmt.Errorf("count filtered scim groups: %w", err)
+	}
+
+	// List query
+	listBuilder := psql.Select("id", "scim_directory_id", "display_name", "deleted", "attributes").
+		From("scim_groups").
+		Where(sq.Eq{"scim_directory_id": scimDirID}).
+		Where(sq.Eq{"deleted": false}).
+		OrderBy("id").
+		Offset(uint64(req.StartIndex)).
+		Limit(10)
+	if parsedFilter.Where != nil {
+		listBuilder = listBuilder.Where(parsedFilter.Where)
+	}
+
+	listSQL, listArgs, err := listBuilder.ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("build list query: %w", err)
+	}
+
+	rows, err := s.db.Query(ctx, listSQL, listArgs...)
+	if err != nil {
+		return nil, fmt.Errorf("list filtered scim groups: %w", err)
+	}
+	defer rows.Close()
+
+	var scimGroups []*ssoreadyv1.SCIMGroup
+	for rows.Next() {
+		var qGroup queries.ScimGroup
+		if err := rows.Scan(&qGroup.ID, &qGroup.ScimDirectoryID, &qGroup.DisplayName, &qGroup.Deleted, &qGroup.Attributes); err != nil {
+			return nil, fmt.Errorf("scan scim group: %w", err)
+		}
+		scimGroups = append(scimGroups, parseSCIMGroup(qGroup))
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate scim groups: %w", err)
+	}
+
+	return &AuthListSCIMGroupsFilteredResponse{
 		TotalResults: int(count),
 		SCIMGroups:   scimGroups,
 	}, nil

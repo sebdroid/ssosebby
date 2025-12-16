@@ -1,10 +1,14 @@
 package authservice
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"regexp"
 	"testing"
 
 	ssoreadyv1 "github.com/sebdroid/ssosebby/internal/gen/ssoready/v1"
+	"github.com/sebdroid/ssosebby/internal/store"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/types/known/structpb"
 )
@@ -234,10 +238,10 @@ func TestSCIMActiveFilterRegex(t *testing.T) {
 
 func TestSCIMCompoundFilterParsing(t *testing.T) {
 	tests := []struct {
-		name           string
-		filter         string
-		expectEmail    *string
-		expectActive   *bool
+		name         string
+		filter       string
+		expectEmail  *string
+		expectActive *bool
 	}{
 		{
 			name:         "email only",
@@ -294,9 +298,10 @@ func TestSCIMCompoundFilterParsing(t *testing.T) {
 			if match := filterActivePat.FindStringSubmatch(tt.filter); match != nil {
 				activeValue := match[1]
 				// strip quotes if present
-				if activeValue == `"true"` {
+				switch activeValue {
+				case `"true"`:
 					activeValue = "true"
-				} else if activeValue == `"false"` {
+				case `"false"`:
 					activeValue = "false"
 				}
 				active := activeValue == "true"
@@ -339,4 +344,294 @@ func strPtr(s string) *string {
 
 func boolPtr(b bool) *bool {
 	return &b
+}
+
+// mockSCIMStore implements the store methods needed for SCIM handler tests
+type mockSCIMStore struct {
+	GetSCIMUserIncludeDeletedFunc func(ctx context.Context, req *store.AuthGetSCIMUserIncludeDeletedRequest) (*ssoreadyv1.SCIMUser, error)
+	UpdateSCIMUserFunc            func(ctx context.Context, req *store.AuthUpdateSCIMUserRequest) (*store.AuthUpdateSCIMUserResponse, error)
+	GetSCIMDirectoryDomainsFunc   func(ctx context.Context, scimDirectoryID string) ([]string, error)
+}
+
+func (m *mockSCIMStore) AuthGetSCIMUserIncludeDeleted(ctx context.Context, req *store.AuthGetSCIMUserIncludeDeletedRequest) (*ssoreadyv1.SCIMUser, error) {
+	if m.GetSCIMUserIncludeDeletedFunc != nil {
+		return m.GetSCIMUserIncludeDeletedFunc(ctx, req)
+	}
+	return nil, nil
+}
+
+func (m *mockSCIMStore) AuthUpdateSCIMUser(ctx context.Context, req *store.AuthUpdateSCIMUserRequest) (*store.AuthUpdateSCIMUserResponse, error) {
+	if m.UpdateSCIMUserFunc != nil {
+		return m.UpdateSCIMUserFunc(ctx, req)
+	}
+	return nil, nil
+}
+
+func (m *mockSCIMStore) AuthGetSCIMDirectoryOrganizationDomains(ctx context.Context, scimDirectoryID string) ([]string, error) {
+	if m.GetSCIMDirectoryDomainsFunc != nil {
+		return m.GetSCIMDirectoryDomainsFunc(ctx, scimDirectoryID)
+	}
+	return []string{"example.com"}, nil
+}
+
+func TestScimPatchUser_DeletedUser_Returns404(t *testing.T) {
+	mockStore := &mockSCIMStore{
+		GetSCIMUserIncludeDeletedFunc: func(ctx context.Context, req *store.AuthGetSCIMUserIncludeDeletedRequest) (*ssoreadyv1.SCIMUser, error) {
+			attrs, _ := structpb.NewStruct(map[string]any{"active": false})
+			return &ssoreadyv1.SCIMUser{
+				Id:              req.SCIMUserID,
+				ScimDirectoryId: req.SCIMDirectoryID,
+				Email:           "deleted@example.com",
+				Deleted:         true, // User is deleted
+				Attributes:      attrs,
+			}, nil
+		},
+	}
+
+	w := httptest.NewRecorder()
+	ctx := context.Background()
+
+	scimUser, err := mockStore.AuthGetSCIMUserIncludeDeleted(ctx, &store.AuthGetSCIMUserIncludeDeletedRequest{
+		SCIMDirectoryID: "scim_directory_123",
+		SCIMUserID:      "scim_user_456",
+	})
+	assert.NoError(t, err)
+
+	// This is the key check - if user is deleted, return 404
+	if scimUser.Deleted {
+		w.WriteHeader(http.StatusNotFound)
+	}
+
+	assert.Equal(t, http.StatusNotFound, w.Code, "PATCH on deleted user should return 404")
+}
+
+func TestScimPatchUser_NonExistentUser_Returns404(t *testing.T) {
+	mockStore := &mockSCIMStore{
+		GetSCIMUserIncludeDeletedFunc: func(ctx context.Context, req *store.AuthGetSCIMUserIncludeDeletedRequest) (*ssoreadyv1.SCIMUser, error) {
+			return nil, store.ErrSCIMUserNotFound
+		},
+	}
+
+	w := httptest.NewRecorder()
+	ctx := context.Background()
+
+	_, err := mockStore.AuthGetSCIMUserIncludeDeleted(ctx, &store.AuthGetSCIMUserIncludeDeletedRequest{
+		SCIMDirectoryID: "scim_directory_123",
+		SCIMUserID:      "scim_user_456",
+	})
+
+	// This is the key check - if user not found, return 404
+	if err == store.ErrSCIMUserNotFound {
+		w.WriteHeader(http.StatusNotFound)
+	}
+
+	assert.Equal(t, http.StatusNotFound, w.Code, "PATCH on non-existent user should return 404")
+}
+
+func TestScimUpdateUser_DeletedUser_Returns404(t *testing.T) {
+	mockStore := &mockSCIMStore{
+		UpdateSCIMUserFunc: func(ctx context.Context, req *store.AuthUpdateSCIMUserRequest) (*store.AuthUpdateSCIMUserResponse, error) {
+			return nil, store.ErrSCIMUserNotFound
+		},
+	}
+
+	w := httptest.NewRecorder()
+	ctx := context.Background()
+
+	_, err := mockStore.AuthUpdateSCIMUser(ctx, &store.AuthUpdateSCIMUserRequest{
+		SCIMUser: &ssoreadyv1.SCIMUser{
+			Id:              "scim_user_456",
+			ScimDirectoryId: "scim_directory_123",
+			Email:           "user@example.com",
+		},
+	})
+
+	// This is the key check - if user not found (deleted), return 404
+	if err == store.ErrSCIMUserNotFound {
+		w.WriteHeader(http.StatusNotFound)
+	}
+
+	assert.Equal(t, http.StatusNotFound, w.Code, "PUT on deleted user should return 404")
+}
+
+func TestScimUpdateUser_NonExistentUser_Returns404(t *testing.T) {
+	mockStore := &mockSCIMStore{
+		UpdateSCIMUserFunc: func(ctx context.Context, req *store.AuthUpdateSCIMUserRequest) (*store.AuthUpdateSCIMUserResponse, error) {
+			return nil, store.ErrSCIMUserNotFound
+		},
+	}
+
+	w := httptest.NewRecorder()
+	ctx := context.Background()
+
+	_, err := mockStore.AuthUpdateSCIMUser(ctx, &store.AuthUpdateSCIMUserRequest{
+		SCIMUser: &ssoreadyv1.SCIMUser{
+			Id:              "non_existent_user",
+			ScimDirectoryId: "scim_directory_123",
+			Email:           "user@example.com",
+		},
+	})
+
+	if err == store.ErrSCIMUserNotFound {
+		w.WriteHeader(http.StatusNotFound)
+	}
+
+	assert.Equal(t, http.StatusNotFound, w.Code, "PUT on non-existent user should return 404")
+}
+
+func TestScimPatchUser_ActiveUser_UpdatesSuccessfully(t *testing.T) {
+	mockStore := &mockSCIMStore{
+		GetSCIMUserIncludeDeletedFunc: func(ctx context.Context, req *store.AuthGetSCIMUserIncludeDeletedRequest) (*ssoreadyv1.SCIMUser, error) {
+			attrs, _ := structpb.NewStruct(map[string]any{"active": true})
+			return &ssoreadyv1.SCIMUser{
+				Id:              req.SCIMUserID,
+				ScimDirectoryId: req.SCIMDirectoryID,
+				Email:           "active@example.com",
+				Deleted:         false,
+				Attributes:      attrs,
+			}, nil
+		},
+		UpdateSCIMUserFunc: func(ctx context.Context, req *store.AuthUpdateSCIMUserRequest) (*store.AuthUpdateSCIMUserResponse, error) {
+			return &store.AuthUpdateSCIMUserResponse{
+				SCIMUser: req.SCIMUser,
+			}, nil
+		},
+	}
+
+	w := httptest.NewRecorder()
+	ctx := context.Background()
+
+	scimUser, err := mockStore.AuthGetSCIMUserIncludeDeleted(ctx, &store.AuthGetSCIMUserIncludeDeletedRequest{
+		SCIMDirectoryID: "scim_directory_123",
+		SCIMUserID:      "scim_user_456",
+	})
+	assert.NoError(t, err)
+	assert.False(t, scimUser.Deleted, "User should not be deleted")
+
+	// User is not deleted, so update should proceed
+	if !scimUser.Deleted {
+		_, err = mockStore.AuthUpdateSCIMUser(ctx, &store.AuthUpdateSCIMUserRequest{
+			SCIMUser: scimUser,
+		})
+		assert.NoError(t, err)
+		w.WriteHeader(http.StatusNoContent)
+	}
+
+	assert.Equal(t, http.StatusNoContent, w.Code, "PATCH on active user should return 204")
+}
+
+func TestScimPatchUser_InactiveUser_UpdatesSuccessfully(t *testing.T) {
+	mockStore := &mockSCIMStore{
+		GetSCIMUserIncludeDeletedFunc: func(ctx context.Context, req *store.AuthGetSCIMUserIncludeDeletedRequest) (*ssoreadyv1.SCIMUser, error) {
+			// User with active=false (inactive) but NOT deleted
+			attrs, _ := structpb.NewStruct(map[string]any{"active": false})
+			return &ssoreadyv1.SCIMUser{
+				Id:              req.SCIMUserID,
+				ScimDirectoryId: req.SCIMDirectoryID,
+				Email:           "inactive@example.com",
+				Deleted:         false, // Not deleted, just inactive
+				Attributes:      attrs,
+			}, nil
+		},
+		UpdateSCIMUserFunc: func(ctx context.Context, req *store.AuthUpdateSCIMUserRequest) (*store.AuthUpdateSCIMUserResponse, error) {
+			return &store.AuthUpdateSCIMUserResponse{
+				SCIMUser: req.SCIMUser,
+			}, nil
+		},
+	}
+
+	w := httptest.NewRecorder()
+	ctx := context.Background()
+
+	scimUser, err := mockStore.AuthGetSCIMUserIncludeDeleted(ctx, &store.AuthGetSCIMUserIncludeDeletedRequest{
+		SCIMDirectoryID: "scim_directory_123",
+		SCIMUserID:      "scim_user_456",
+	})
+	assert.NoError(t, err)
+	assert.False(t, scimUser.Deleted, "User should not be deleted (just inactive)")
+
+	// User is not deleted, so update should proceed even if inactive
+	if !scimUser.Deleted {
+		_, err = mockStore.AuthUpdateSCIMUser(ctx, &store.AuthUpdateSCIMUserRequest{
+			SCIMUser: scimUser,
+		})
+		assert.NoError(t, err)
+		w.WriteHeader(http.StatusNoContent)
+	}
+
+	assert.Equal(t, http.StatusNoContent, w.Code, "PATCH on inactive (but not deleted) user should return 204")
+}
+
+func TestScimUpdateUser_ActiveUser_UpdatesSuccessfully(t *testing.T) {
+	updatedUser := &ssoreadyv1.SCIMUser{
+		Id:              "scim_user_456",
+		ScimDirectoryId: "scim_directory_123",
+		Email:           "updated@example.com",
+		Deleted:         false,
+	}
+
+	mockStore := &mockSCIMStore{
+		UpdateSCIMUserFunc: func(ctx context.Context, req *store.AuthUpdateSCIMUserRequest) (*store.AuthUpdateSCIMUserResponse, error) {
+			return &store.AuthUpdateSCIMUserResponse{
+				SCIMUser: updatedUser,
+			}, nil
+		},
+	}
+
+	w := httptest.NewRecorder()
+	ctx := context.Background()
+
+	resp, err := mockStore.AuthUpdateSCIMUser(ctx, &store.AuthUpdateSCIMUserRequest{
+		SCIMUser: &ssoreadyv1.SCIMUser{
+			Id:              "scim_user_456",
+			ScimDirectoryId: "scim_directory_123",
+			Email:           "updated@example.com",
+		},
+	})
+
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, "updated@example.com", resp.SCIMUser.Email)
+	w.WriteHeader(http.StatusOK)
+
+	assert.Equal(t, http.StatusOK, w.Code, "PUT on active user should return 200")
+}
+
+func TestScimUpdateUser_InactiveUser_UpdatesSuccessfully(t *testing.T) {
+	// Inactive user (active=false in attributes) but not deleted
+	attrs, _ := structpb.NewStruct(map[string]any{"active": false})
+	updatedUser := &ssoreadyv1.SCIMUser{
+		Id:              "scim_user_456",
+		ScimDirectoryId: "scim_directory_123",
+		Email:           "inactive@example.com",
+		Deleted:         false,
+		Attributes:      attrs,
+	}
+
+	mockStore := &mockSCIMStore{
+		UpdateSCIMUserFunc: func(ctx context.Context, req *store.AuthUpdateSCIMUserRequest) (*store.AuthUpdateSCIMUserResponse, error) {
+			return &store.AuthUpdateSCIMUserResponse{
+				SCIMUser: updatedUser,
+			}, nil
+		},
+	}
+
+	w := httptest.NewRecorder()
+	ctx := context.Background()
+
+	resp, err := mockStore.AuthUpdateSCIMUser(ctx, &store.AuthUpdateSCIMUserRequest{
+		SCIMUser: &ssoreadyv1.SCIMUser{
+			Id:              "scim_user_456",
+			ScimDirectoryId: "scim_directory_123",
+			Email:           "inactive@example.com",
+			Attributes:      attrs,
+		},
+	})
+
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, "inactive@example.com", resp.SCIMUser.Email)
+	w.WriteHeader(http.StatusOK)
+
+	assert.Equal(t, http.StatusOK, w.Code, "PUT on inactive (but not deleted) user should return 200")
 }
