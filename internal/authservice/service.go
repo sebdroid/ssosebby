@@ -99,6 +99,13 @@ func (s *Service) NewHandler() http.Handler {
 	r.Handle("/v1/scim/{scim_directory_id}/Groups/{scim_group_id}", logHandlerIncludeRespHeaders(s.scimMiddleware(s.scimPatchGroup))).Methods(http.MethodPatch)
 	r.Handle("/v1/scim/{scim_directory_id}/Groups/{scim_group_id}", logHandlerIncludeRespHeaders(s.scimMiddleware(s.scimDeleteGroup))).Methods(http.MethodDelete)
 
+	// SCIM Discovery endpoints per RFC 7644
+	r.Handle("/v1/scim/{scim_directory_id}/ServiceProviderConfig", logHandlerIncludeRespHeaders(s.scimMiddleware(s.scimGetServiceProviderConfig))).Methods(http.MethodGet)
+	r.Handle("/v1/scim/{scim_directory_id}/Schemas", logHandlerIncludeRespHeaders(s.scimMiddleware(s.scimGetSchemas))).Methods(http.MethodGet)
+	r.Handle("/v1/scim/{scim_directory_id}/Schemas/{schema_id:.*}", logHandlerIncludeRespHeaders(s.scimMiddleware(s.scimGetSchema))).Methods(http.MethodGet)
+	r.Handle("/v1/scim/{scim_directory_id}/ResourceTypes", logHandlerIncludeRespHeaders(s.scimMiddleware(s.scimGetResourceTypes))).Methods(http.MethodGet)
+	r.Handle("/v1/scim/{scim_directory_id}/ResourceTypes/{resource_type_id}", logHandlerIncludeRespHeaders(s.scimMiddleware(s.scimGetResourceType))).Methods(http.MethodGet)
+
 	return r
 }
 

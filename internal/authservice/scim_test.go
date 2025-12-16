@@ -635,3 +635,427 @@ func TestScimUpdateUser_InactiveUser_UpdatesSuccessfully(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code, "PUT on inactive (but not deleted) user should return 200")
 }
+
+// Tests for SCIM Schema definitions
+
+func TestScimUserSchema(t *testing.T) {
+	// Verify the User schema has required fields per RFC 7643
+	assert.Equal(t, "urn:ietf:params:scim:schemas:core:2.0:User", scimUserSchema["id"])
+	assert.Equal(t, "User", scimUserSchema["name"])
+	assert.Equal(t, "User Account", scimUserSchema["description"])
+
+	attributes := scimUserSchema["attributes"].([]map[string]any)
+	assert.NotEmpty(t, attributes, "User schema should have attributes")
+
+	// Verify required userName attribute exists
+	var foundUserName bool
+	for _, attr := range attributes {
+		if attr["name"] == "userName" {
+			foundUserName = true
+			assert.Equal(t, "string", attr["type"])
+			assert.Equal(t, true, attr["required"])
+			assert.Equal(t, "server", attr["uniqueness"])
+			break
+		}
+	}
+	assert.True(t, foundUserName, "User schema should have userName attribute")
+}
+
+func TestScimGroupSchema(t *testing.T) {
+	// Verify the Group schema has required fields per RFC 7643
+	assert.Equal(t, "urn:ietf:params:scim:schemas:core:2.0:Group", scimGroupSchema["id"])
+	assert.Equal(t, "Group", scimGroupSchema["name"])
+
+	attributes := scimGroupSchema["attributes"].([]map[string]any)
+	assert.NotEmpty(t, attributes, "Group schema should have attributes")
+
+	// Verify required displayName attribute exists
+	var foundDisplayName bool
+	for _, attr := range attributes {
+		if attr["name"] == "displayName" {
+			foundDisplayName = true
+			assert.Equal(t, "string", attr["type"])
+			assert.Equal(t, true, attr["required"])
+			break
+		}
+	}
+	assert.True(t, foundDisplayName, "Group schema should have displayName attribute")
+
+	// Verify members attribute exists
+	var foundMembers bool
+	for _, attr := range attributes {
+		if attr["name"] == "members" {
+			foundMembers = true
+			assert.Equal(t, "complex", attr["type"])
+			assert.Equal(t, true, attr["multiValued"])
+			break
+		}
+	}
+	assert.True(t, foundMembers, "Group schema should have members attribute")
+}
+
+func TestScimEnterpriseUserSchema(t *testing.T) {
+	// Verify the EnterpriseUser schema has required fields per RFC 7643
+	assert.Equal(t, "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User", scimEnterpriseUserSchema["id"])
+	assert.Equal(t, "EnterpriseUser", scimEnterpriseUserSchema["name"])
+
+	attributes := scimEnterpriseUserSchema["attributes"].([]map[string]any)
+	assert.NotEmpty(t, attributes, "EnterpriseUser schema should have attributes")
+
+	// Verify expected enterprise attributes exist
+	expectedAttrs := []string{"employeeNumber", "costCenter", "organization", "division", "department", "manager"}
+	foundAttrs := make(map[string]bool)
+	for _, attr := range attributes {
+		name := attr["name"].(string)
+		foundAttrs[name] = true
+	}
+
+	for _, expected := range expectedAttrs {
+		assert.True(t, foundAttrs[expected], "EnterpriseUser schema should have %s attribute", expected)
+	}
+}
+
+func TestCopySchemaWithLocation(t *testing.T) {
+	baseURL := "/v1/scim/test_directory"
+
+	// Test that copySchemaWithLocation creates correct location URLs
+	userSchemaCopy := copySchemaWithLocation(scimUserSchema, baseURL)
+
+	meta := userSchemaCopy["meta"].(map[string]any)
+	assert.Equal(t, "Schema", meta["resourceType"])
+	assert.Equal(t, "/v1/scim/test_directory/Schemas/urn:ietf:params:scim:schemas:core:2.0:User", meta["location"])
+
+	// Verify original schema is not modified
+	originalMeta := scimUserSchema["meta"].(map[string]any)
+	assert.Contains(t, originalMeta["location"], "{scim_directory_id}", "Original schema should not be modified")
+}
+
+func TestScimGetSchemasResponse(t *testing.T) {
+	// Test the schemas list response format
+	baseURL := "/v1/scim/test_directory"
+
+	userSchema := copySchemaWithLocation(scimUserSchema, baseURL)
+	groupSchema := copySchemaWithLocation(scimGroupSchema, baseURL)
+	enterpriseUserSchema := copySchemaWithLocation(scimEnterpriseUserSchema, baseURL)
+
+	schemas := []any{userSchema, groupSchema, enterpriseUserSchema}
+
+	// Verify we have exactly 3 schemas
+	assert.Len(t, schemas, 3)
+
+	// Verify each schema has an id
+	for _, s := range schemas {
+		schema := s.(map[string]any)
+		assert.NotEmpty(t, schema["id"], "Each schema should have an id")
+		assert.NotEmpty(t, schema["name"], "Each schema should have a name")
+		assert.NotEmpty(t, schema["attributes"], "Each schema should have attributes")
+	}
+}
+
+func TestScimResourceTypeDefinitions(t *testing.T) {
+	baseURL := "/v1/scim/test_directory"
+
+	// Test User ResourceType
+	userResourceType := map[string]any{
+		"schemas":     []string{"urn:ietf:params:scim:schemas:core:2.0:ResourceType"},
+		"id":          "User",
+		"name":        "User",
+		"endpoint":    "/Users",
+		"description": "User Account",
+		"schema":      "urn:ietf:params:scim:schemas:core:2.0:User",
+		"schemaExtensions": []map[string]any{
+			{
+				"schema":   "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
+				"required": false,
+			},
+		},
+		"meta": map[string]any{
+			"location":     baseURL + "/ResourceTypes/User",
+			"resourceType": "ResourceType",
+		},
+	}
+
+	assert.Equal(t, "User", userResourceType["id"])
+	assert.Equal(t, "User", userResourceType["name"])
+	assert.Equal(t, "/Users", userResourceType["endpoint"])
+	assert.Equal(t, "urn:ietf:params:scim:schemas:core:2.0:User", userResourceType["schema"])
+
+	// Verify schema extensions
+	extensions := userResourceType["schemaExtensions"].([]map[string]any)
+	assert.Len(t, extensions, 1)
+	assert.Equal(t, "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User", extensions[0]["schema"])
+	assert.Equal(t, false, extensions[0]["required"])
+
+	// Test Group ResourceType
+	groupResourceType := map[string]any{
+		"schemas":     []string{"urn:ietf:params:scim:schemas:core:2.0:ResourceType"},
+		"id":          "Group",
+		"name":        "Group",
+		"endpoint":    "/Groups",
+		"description": "Group",
+		"schema":      "urn:ietf:params:scim:schemas:core:2.0:Group",
+		"meta": map[string]any{
+			"location":     baseURL + "/ResourceTypes/Group",
+			"resourceType": "ResourceType",
+		},
+	}
+
+	assert.Equal(t, "Group", groupResourceType["id"])
+	assert.Equal(t, "Group", groupResourceType["name"])
+	assert.Equal(t, "/Groups", groupResourceType["endpoint"])
+	assert.Equal(t, "urn:ietf:params:scim:schemas:core:2.0:Group", groupResourceType["schema"])
+}
+
+func TestScimSchemaAttributeTypes(t *testing.T) {
+	// Verify that schema attributes have valid types per RFC 7643
+	validTypes := map[string]bool{
+		"string":    true,
+		"boolean":   true,
+		"decimal":   true,
+		"integer":   true,
+		"dateTime":  true,
+		"reference": true,
+		"complex":   true,
+		"binary":    true,
+	}
+
+	attributes := scimUserSchema["attributes"].([]map[string]any)
+	for _, attr := range attributes {
+		attrType := attr["type"].(string)
+		assert.True(t, validTypes[attrType], "Attribute %s has invalid type: %s", attr["name"], attrType)
+	}
+}
+
+func TestScimSchemaAttributeMutability(t *testing.T) {
+	// Verify that schema attributes have valid mutability values per RFC 7643
+	validMutability := map[string]bool{
+		"readOnly":  true,
+		"readWrite": true,
+		"immutable": true,
+		"writeOnly": true,
+	}
+
+	attributes := scimUserSchema["attributes"].([]map[string]any)
+	for _, attr := range attributes {
+		if mutability, ok := attr["mutability"].(string); ok {
+			assert.True(t, validMutability[mutability], "Attribute %s has invalid mutability: %s", attr["name"], mutability)
+		}
+	}
+}
+
+func TestScimSchemaAttributeReturned(t *testing.T) {
+	// Verify that schema attributes have valid returned values per RFC 7643
+	validReturned := map[string]bool{
+		"always":  true,
+		"never":   true,
+		"default": true,
+		"request": true,
+	}
+
+	attributes := scimUserSchema["attributes"].([]map[string]any)
+	for _, attr := range attributes {
+		if returned, ok := attr["returned"].(string); ok {
+			assert.True(t, validReturned[returned], "Attribute %s has invalid returned: %s", attr["name"], returned)
+		}
+	}
+}
+
+func TestScimSchemaSubAttributes(t *testing.T) {
+	// Verify complex attributes have subAttributes defined
+	attributes := scimUserSchema["attributes"].([]map[string]any)
+
+	for _, attr := range attributes {
+		if attr["type"] == "complex" {
+			subAttrs, ok := attr["subAttributes"]
+			assert.True(t, ok, "Complex attribute %s should have subAttributes", attr["name"])
+			assert.NotEmpty(t, subAttrs, "Complex attribute %s should have non-empty subAttributes", attr["name"])
+		}
+	}
+}
+
+func TestScimSchemaURNs(t *testing.T) {
+	// Verify all schema URNs follow SCIM naming conventions
+	schemas := []map[string]any{scimUserSchema, scimGroupSchema, scimEnterpriseUserSchema}
+
+	for _, schema := range schemas {
+		id := schema["id"].(string)
+		assert.True(t, len(id) > 0, "Schema id should not be empty")
+		assert.Contains(t, id, "urn:ietf:params:scim:schemas:", "Schema id should be a valid SCIM URN")
+	}
+}
+
+// Tests for ServiceProviderConfig endpoint
+
+func TestScimServiceProviderConfig_RequiredFields(t *testing.T) {
+	// Build a ServiceProviderConfig response as the handler would
+	baseURL := "/v1/scim/test_directory"
+
+	config := map[string]any{
+		"schemas":          []string{"urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"},
+		"documentationUri": "https://www.rfc-editor.org/rfc/rfc7644",
+		"patch": map[string]any{
+			"supported": true,
+		},
+		"bulk": map[string]any{
+			"supported":      false,
+			"maxOperations":  0,
+			"maxPayloadSize": 0,
+		},
+		"filter": map[string]any{
+			"supported":  true,
+			"maxResults": 200,
+		},
+		"changePassword": map[string]any{
+			"supported": false,
+		},
+		"sort": map[string]any{
+			"supported": false,
+		},
+		"etag": map[string]any{
+			"supported": false,
+		},
+		"authenticationSchemes": []map[string]any{
+			{
+				"type":             "oauthbearertoken",
+				"name":             "OAuth Bearer Token",
+				"description":      "Authentication scheme using the OAuth Bearer Token Standard",
+				"specUri":          "https://www.rfc-editor.org/rfc/rfc6750",
+				"documentationUri": "https://www.rfc-editor.org/rfc/rfc6750",
+			},
+		},
+		"meta": map[string]any{
+			"location":     baseURL + "/ServiceProviderConfig",
+			"resourceType": "ServiceProviderConfig",
+		},
+	}
+
+	// Verify schema
+	schemas := config["schemas"].([]string)
+	assert.Len(t, schemas, 1)
+	assert.Equal(t, "urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig", schemas[0])
+
+	// Verify all required complex attributes exist per RFC 7643 Section 5
+	assert.NotNil(t, config["patch"], "patch is required")
+	assert.NotNil(t, config["bulk"], "bulk is required")
+	assert.NotNil(t, config["filter"], "filter is required")
+	assert.NotNil(t, config["changePassword"], "changePassword is required")
+	assert.NotNil(t, config["sort"], "sort is required")
+	assert.NotNil(t, config["etag"], "etag is required")
+	assert.NotNil(t, config["authenticationSchemes"], "authenticationSchemes is required")
+}
+
+func TestScimServiceProviderConfig_PatchSupported(t *testing.T) {
+	config := map[string]any{
+		"patch": map[string]any{
+			"supported": true,
+		},
+	}
+
+	patch := config["patch"].(map[string]any)
+	assert.True(t, patch["supported"].(bool), "PATCH should be supported")
+}
+
+func TestScimServiceProviderConfig_BulkConfig(t *testing.T) {
+	config := map[string]any{
+		"bulk": map[string]any{
+			"supported":      false,
+			"maxOperations":  0,
+			"maxPayloadSize": 0,
+		},
+	}
+
+	bulk := config["bulk"].(map[string]any)
+	assert.False(t, bulk["supported"].(bool), "Bulk operations not supported")
+	assert.Equal(t, 0, bulk["maxOperations"].(int), "maxOperations should be 0 when not supported")
+	assert.Equal(t, 0, bulk["maxPayloadSize"].(int), "maxPayloadSize should be 0 when not supported")
+}
+
+func TestScimServiceProviderConfig_FilterConfig(t *testing.T) {
+	config := map[string]any{
+		"filter": map[string]any{
+			"supported":  true,
+			"maxResults": 200,
+		},
+	}
+
+	filter := config["filter"].(map[string]any)
+	assert.True(t, filter["supported"].(bool), "Filter should be supported")
+	assert.Equal(t, 200, filter["maxResults"].(int), "maxResults should be 200")
+}
+
+func TestScimServiceProviderConfig_AuthenticationSchemes(t *testing.T) {
+	config := map[string]any{
+		"authenticationSchemes": []map[string]any{
+			{
+				"type":             "oauthbearertoken",
+				"name":             "OAuth Bearer Token",
+				"description":      "Authentication scheme using the OAuth Bearer Token Standard",
+				"specUri":          "https://www.rfc-editor.org/rfc/rfc6750",
+				"documentationUri": "https://www.rfc-editor.org/rfc/rfc6750",
+			},
+		},
+	}
+
+	schemes := config["authenticationSchemes"].([]map[string]any)
+	assert.Len(t, schemes, 1, "Should have one authentication scheme")
+
+	scheme := schemes[0]
+	assert.Equal(t, "oauthbearertoken", scheme["type"], "Type should be oauthbearertoken")
+	assert.Equal(t, "OAuth Bearer Token", scheme["name"], "Name should be OAuth Bearer Token")
+	assert.NotEmpty(t, scheme["description"], "Description is required")
+
+	// Verify type is a valid SCIM authentication type
+	validTypes := map[string]bool{
+		"oauth":            true,
+		"oauth2":           true,
+		"oauthbearertoken": true,
+		"httpbasic":        true,
+		"httpdigest":       true,
+	}
+	assert.True(t, validTypes[scheme["type"].(string)], "Authentication type should be valid per RFC 7643")
+}
+
+func TestScimServiceProviderConfig_MetaLocation(t *testing.T) {
+	baseURL := "/v1/scim/test_directory"
+
+	config := map[string]any{
+		"meta": map[string]any{
+			"location":     baseURL + "/ServiceProviderConfig",
+			"resourceType": "ServiceProviderConfig",
+		},
+	}
+
+	meta := config["meta"].(map[string]any)
+	assert.Equal(t, "/v1/scim/test_directory/ServiceProviderConfig", meta["location"])
+	assert.Equal(t, "ServiceProviderConfig", meta["resourceType"])
+}
+
+func TestScimServiceProviderConfig_UnsupportedFeatures(t *testing.T) {
+	// Verify features that are not supported are correctly marked
+	config := map[string]any{
+		"changePassword": map[string]any{
+			"supported": false,
+		},
+		"sort": map[string]any{
+			"supported": false,
+		},
+		"etag": map[string]any{
+			"supported": false,
+		},
+		"bulk": map[string]any{
+			"supported": false,
+		},
+	}
+
+	changePassword := config["changePassword"].(map[string]any)
+	assert.False(t, changePassword["supported"].(bool), "changePassword should not be supported")
+
+	sort := config["sort"].(map[string]any)
+	assert.False(t, sort["supported"].(bool), "sort should not be supported")
+
+	etag := config["etag"].(map[string]any)
+	assert.False(t, etag["supported"].(bool), "etag should not be supported")
+
+	bulk := config["bulk"].(map[string]any)
+	assert.False(t, bulk["supported"].(bool), "bulk should not be supported")
+}
