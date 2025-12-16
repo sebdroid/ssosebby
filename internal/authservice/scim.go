@@ -10,8 +10,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -60,151 +58,47 @@ func (s *Service) scimListUsers(w http.ResponseWriter, r *http.Request) error {
 		startIndex = i - 1 // scim is 1-indexed, store is 0-indexed
 	}
 
-	if r.URL.Query().Has("filter") {
-		filter := r.URL.Query().Get("filter")
-
-		// parse filter components - supports "and" compound filters
-		var filterEmail *string
-		var filterActive *bool
-
-		// extract active filter: active eq true/false or active eq "true"/"false"
-		filterActivePat := regexp.MustCompile(`active eq (true|false|"true"|"false")`)
-		if match := filterActivePat.FindStringSubmatch(filter); match != nil {
-			activeValue := strings.Trim(match[1], `"`)
-			active := activeValue == "true"
-			filterActive = &active
-		}
-
-		// extract email/userName filter
-		filterEmailPat := regexp.MustCompile(`(userName|email\.value) eq "(.*?)"`)
-		if match := filterEmailPat.FindStringSubmatch(filter); match != nil {
-			// scimvalidator.microsoft.com sends url-encoded values; harmless to "normal" emails to url-parse them
-			email, err := url.QueryUnescape(match[2])
-			if err != nil {
-				panic(err)
-			}
-			filterEmail = &email
-		}
-
-		// must have at least one supported filter
-		if filterEmail == nil && filterActive == nil {
-			panic("unsupported filter param")
-		}
-
-		// handle combined email + active filter
-		if filterEmail != nil && filterActive != nil {
-			scimUser, err := s.Store.AuthGetSCIMUserByEmailAndActive(ctx, &store.AuthGetSCIMUserByEmailAndActiveRequest{
-				SCIMDirectoryID: scimDirectoryID,
-				Email:           *filterEmail,
-				Active:          *filterActive,
-			})
-			if err != nil {
-				if errors.Is(err, store.ErrSCIMUserNotFound) {
-					w.Header().Set("Content-Type", "application/scim+json")
-					w.WriteHeader(http.StatusOK)
-					if err := json.NewEncoder(w).Encode(scimListResponse{
-						TotalResults: 0,
-						ItemsPerPage: 1,
-						StartIndex:   1,
-						Schemas:      []string{"urn:ietf:params:scim:api:messages:2.0:ListResponse"},
-						Resources:    []any{},
-					}); err != nil {
-						panic(err)
-					}
-					return nil
-				}
-				panic(err)
-			}
-
-			resource := scimUserToResource(scimUser)
-			w.Header().Set("Content-Type", "application/scim+json")
-			w.WriteHeader(http.StatusOK)
-			if err := json.NewEncoder(w).Encode(scimListResponse{
-				TotalResults: 1,
-				ItemsPerPage: 1,
-				StartIndex:   1,
-				Schemas:      []string{"urn:ietf:params:scim:api:messages:2.0:ListResponse"},
-				Resources:    []any{resource},
-			}); err != nil {
-				panic(err)
-			}
-			return nil
-		}
-
-		// handle active-only filter
-		if filterActive != nil {
-			scimUsers, err := s.Store.AuthListSCIMUsersByActive(ctx, &store.AuthListSCIMUsersByActiveRequest{
-				SCIMDirectoryID: scimDirectoryID,
-				Active:          *filterActive,
-				StartIndex:      startIndex,
-			})
-			if err != nil {
-				panic(fmt.Errorf("store: %w", err))
-			}
-
-			resources := []any{}
-			for _, scimUser := range scimUsers.SCIMUsers {
-				resources = append(resources, scimUserToResource(scimUser))
-			}
-
-			w.Header().Set("Content-Type", "application/scim+json")
-			w.WriteHeader(http.StatusOK)
-			if err := json.NewEncoder(w).Encode(scimListResponse{
-				TotalResults: scimUsers.TotalResults,
-				ItemsPerPage: len(resources),
-				StartIndex:   startIndex + 1, // convert back to 1-indexed for response
-				Schemas:      []string{"urn:ietf:params:scim:api:messages:2.0:ListResponse"},
-				Resources:    resources,
-			}); err != nil {
-				panic(err)
-			}
-			return nil
-		}
-
-		// handle email-only filter
-		scimUser, err := s.Store.AuthGetSCIMUserByEmail(ctx, &store.AuthGetSCIMUserByEmailRequest{
-			SCIMDirectoryID: scimDirectoryID,
-			Email:           *filterEmail,
-		})
+	// parse count per RFC 7644 3.4.2.4
+	// -1 means unspecified (use default), 0 means return only totalResults, negative values treated as 0
+	count := -1 // default: unspecified, let store use default
+	if r.URL.Query().Has("count") {
+		c, err := strconv.Atoi(r.URL.Query().Get("count"))
 		if err != nil {
-			if errors.Is(err, store.ErrSCIMUserNotFound) {
-				w.Header().Set("Content-Type", "application/scim+json")
-				w.WriteHeader(http.StatusOK)
-				if err := json.NewEncoder(w).Encode(scimListResponse{
-					TotalResults: 0,
-					ItemsPerPage: 1,
-					StartIndex:   1,
-					Schemas:      []string{"urn:ietf:params:scim:api:messages:2.0:ListResponse"},
-					Resources:    []any{},
-				}); err != nil {
-					panic(err)
-				}
-				return nil
-			}
-
-			panic(err)
+			http.Error(w, fmt.Sprintf("parse count: %s", err), http.StatusBadRequest)
+			return nil
 		}
-
-		resource := scimUserToResource(scimUser)
-		w.Header().Set("Content-Type", "application/scim+json")
-		w.WriteHeader(http.StatusOK)
-		if err := json.NewEncoder(w).Encode(scimListResponse{
-			TotalResults: 1,
-			ItemsPerPage: 1,
-			StartIndex:   1,
-			Schemas:      []string{"urn:ietf:params:scim:api:messages:2.0:ListResponse"},
-			Resources:    []any{resource},
-		}); err != nil {
-			panic(err)
+		// Per RFC 7644: negative values SHALL be interpreted as "0"
+		if c < 0 {
+			c = 0
 		}
-		return nil
+		count = c
 	}
 
-	scimUsers, err := s.Store.AuthListSCIMUsers(ctx, &store.AuthListSCIMUsersRequest{
+	// Use unified filter parsing - supports RFC 7644 compliant filters
+	// including: eq, ne, co, sw, ew, pr, gt, lt, ge, le, and, or, not
+	// Empty filter string is handled gracefully (returns all users)
+	filter := r.URL.Query().Get("filter")
+	scimUsers, err := s.Store.AuthListSCIMUsersFiltered(ctx, &store.AuthListSCIMUsersFilteredRequest{
 		SCIMDirectoryID: scimDirectoryID,
+		Filter:          filter,
 		StartIndex:      startIndex,
+		Count:           count,
 	})
 	if err != nil {
+		if errors.Is(err, store.ErrInvalidSCIMFilter) {
+			// Return SCIM-compliant error for invalid filter
+			w.Header().Set("Content-Type", "application/scim+json")
+			w.WriteHeader(http.StatusBadRequest)
+			if err := json.NewEncoder(w).Encode(map[string]any{
+				"schemas":  []string{"urn:ietf:params:scim:api:messages:2.0:Error"},
+				"scimType": "invalidFilter",
+				"detail":   err.Error(),
+				"status":   400,
+			}); err != nil {
+				panic(err)
+			}
+			return nil
+		}
 		panic(fmt.Errorf("store: %w", err))
 	}
 
@@ -218,7 +112,7 @@ func (s *Service) scimListUsers(w http.ResponseWriter, r *http.Request) error {
 	if err := json.NewEncoder(w).Encode(scimListResponse{
 		TotalResults: scimUsers.TotalResults,
 		ItemsPerPage: len(resources),
-		StartIndex:   startIndex,
+		StartIndex:   startIndex + 1, // convert back to 1-indexed for response
 		Schemas:      []string{"urn:ietf:params:scim:api:messages:2.0:ListResponse"},
 		Resources:    resources,
 	}); err != nil {
@@ -405,6 +299,10 @@ func (s *Service) scimUpdateUser(w http.ResponseWriter, r *http.Request) error {
 		},
 	})
 	if err != nil {
+		if errors.Is(err, store.ErrSCIMUserNotFound) {
+			w.WriteHeader(http.StatusNotFound)
+			return nil
+		}
 		return fmt.Errorf("store: %w", err)
 	}
 
@@ -440,7 +338,17 @@ func (s *Service) scimPatchUser(w http.ResponseWriter, r *http.Request) error {
 		SCIMUserID:      scimUserID,
 	})
 	if err != nil {
+		if errors.Is(err, store.ErrSCIMUserNotFound) {
+			w.WriteHeader(http.StatusNotFound)
+			return nil
+		}
 		panic(fmt.Errorf("store: get scim user for patch: %w", err))
+	}
+
+	// Return 404 if user has been deleted
+	if scimUser.Deleted {
+		w.WriteHeader(http.StatusNotFound)
+		return nil
 	}
 
 	// convert scimUser to its SCIM representation
@@ -556,29 +464,45 @@ func (s *Service) scimListGroups(w http.ResponseWriter, r *http.Request) error {
 		startIndex = i - 1 // scim is 1-indexed, store is 0-indexed
 	}
 
-	var filterDisplayName string
-	if r.URL.Query().Has("filter") {
-		filterDisplayNamePat := regexp.MustCompile(`displayName eq "(.*)"`)
-		match := filterDisplayNamePat.FindStringSubmatch(r.URL.Query().Get("filter"))
-		if match == nil {
-			panic("unsupported filter param")
+	// parse count per RFC 7644 3.4.2.4
+	// -1 means unspecified (use default), 0 means return only totalResults, negative values treated as 0
+	count := -1 // default: unspecified, let store use default
+	if r.URL.Query().Has("count") {
+		c, err := strconv.Atoi(r.URL.Query().Get("count"))
+		if err != nil {
+			http.Error(w, fmt.Sprintf("parse count: %s", err), http.StatusBadRequest)
+			return nil
 		}
-
-		filterDisplayName = match[1]
+		// Per RFC 7644: negative values SHALL be interpreted as "0"
+		if c < 0 {
+			c = 0
+		}
+		count = c
 	}
 
-	scimGroups, err := s.Store.AuthListSCIMGroups(ctx, &store.AuthListSCIMGroupsRequest{
+	// Use unified filter parsing - supports RFC 7644 compliant filters
+	// Empty filter string is handled gracefully (returns all groups)
+	filter := r.URL.Query().Get("filter")
+	scimGroups, err := s.Store.AuthListSCIMGroupsFiltered(ctx, &store.AuthListSCIMGroupsFilteredRequest{
 		SCIMDirectoryID: scimDirectoryID,
+		Filter:          filter,
 		StartIndex:      startIndex,
-
-		// Unlike ListUsers, which uses a separate query to list users by email
-		// (an operation that's guaranteed to return only one value), ListGroups
-		// here instead does a more traditional filter, because we do not
-		// enforce group uniqueness by displayName. Multiple values may be
-		// returned even if FilterDisplayName is set.
-		FilterDisplayName: filterDisplayName,
+		Count:           count,
 	})
 	if err != nil {
+		if errors.Is(err, store.ErrInvalidSCIMFilter) {
+			w.Header().Set("Content-Type", "application/scim+json")
+			w.WriteHeader(http.StatusBadRequest)
+			if err := json.NewEncoder(w).Encode(map[string]any{
+				"schemas":  []string{"urn:ietf:params:scim:api:messages:2.0:Error"},
+				"scimType": "invalidFilter",
+				"detail":   err.Error(),
+				"status":   400,
+			}); err != nil {
+				panic(err)
+			}
+			return nil
+		}
 		panic(fmt.Errorf("store: %w", err))
 	}
 
@@ -596,7 +520,7 @@ func (s *Service) scimListGroups(w http.ResponseWriter, r *http.Request) error {
 	if err := json.NewEncoder(w).Encode(scimListResponse{
 		TotalResults: scimGroups.TotalResults,
 		ItemsPerPage: len(resources),
-		StartIndex:   startIndex,
+		StartIndex:   startIndex + 1, // convert back to 1-indexed for response
 		Schemas:      []string{"urn:ietf:params:scim:schemas:core:2.0:Group"},
 		Resources:    resources,
 	}); err != nil {
@@ -904,9 +828,10 @@ func scimUserToResource(scimUser *ssoreadyv1.SCIMUser) map[string]any {
 	r["userName"] = scimUser.Email
 
 	// normalize Entra-style "active" property
-	if r["active"] == "True" {
+	switch r["active"] {
+	case "True":
 		r["active"] = true
-	} else if r["active"] == "False" {
+	case "False":
 		r["active"] = false
 	}
 
@@ -931,9 +856,10 @@ func scimUserFromResource(scimDirectoryID, scimUserID string, r map[string]any) 
 	delete(r, "schemas")
 
 	// normalize Entra-style "active" property
-	if r["active"] == "True" {
+	switch r["active"] {
+	case "True":
 		r["active"] = true
-	} else if r["active"] == "False" {
+	case "False":
 		r["active"] = false
 	}
 
@@ -1108,4 +1034,666 @@ func (s *Service) scimMiddleware(f func(w http.ResponseWriter, r *http.Request) 
 func (s *Service) scimVerifyBearerToken(ctx context.Context, scimDirectoryID, authorization string) error {
 	bearerToken := strings.TrimPrefix(authorization, "Bearer ")
 	return s.Store.AuthSCIMVerifyBearerToken(ctx, scimDirectoryID, bearerToken)
+}
+
+// SCIM Schema definitions per RFC 7643
+
+var scimUserSchema = map[string]any{
+	"id":          "urn:ietf:params:scim:schemas:core:2.0:User",
+	"name":        "User",
+	"description": "User Account",
+	"attributes": []map[string]any{
+		{
+			"name":        "userName",
+			"type":        "string",
+			"multiValued": false,
+			"description": "Unique identifier for the User, typically used by the user to directly authenticate to the service provider.",
+			"required":    true,
+			"caseExact":   false,
+			"mutability":  "readWrite",
+			"returned":    "default",
+			"uniqueness":  "server",
+		},
+		{
+			"name":        "name",
+			"type":        "complex",
+			"multiValued": false,
+			"description": "The components of the user's real name.",
+			"required":    false,
+			"mutability":  "readWrite",
+			"returned":    "default",
+			"uniqueness":  "none",
+			"subAttributes": []map[string]any{
+				{"name": "formatted", "type": "string", "multiValued": false, "description": "The full name, including all middle names, titles, and suffixes as appropriate, formatted for display.", "required": false, "caseExact": false, "mutability": "readWrite", "returned": "default", "uniqueness": "none"},
+				{"name": "familyName", "type": "string", "multiValued": false, "description": "The family name of the User, or last name in most Western languages.", "required": false, "caseExact": false, "mutability": "readWrite", "returned": "default", "uniqueness": "none"},
+				{"name": "givenName", "type": "string", "multiValued": false, "description": "The given name of the User, or first name in most Western languages.", "required": false, "caseExact": false, "mutability": "readWrite", "returned": "default", "uniqueness": "none"},
+				{"name": "middleName", "type": "string", "multiValued": false, "description": "The middle name(s) of the User.", "required": false, "caseExact": false, "mutability": "readWrite", "returned": "default", "uniqueness": "none"},
+				{"name": "honorificPrefix", "type": "string", "multiValued": false, "description": "The honorific prefix(es) of the User, or title in most Western languages.", "required": false, "caseExact": false, "mutability": "readWrite", "returned": "default", "uniqueness": "none"},
+				{"name": "honorificSuffix", "type": "string", "multiValued": false, "description": "The honorific suffix(es) of the User, or suffix in most Western languages.", "required": false, "caseExact": false, "mutability": "readWrite", "returned": "default", "uniqueness": "none"},
+			},
+		},
+		{
+			"name":        "displayName",
+			"type":        "string",
+			"multiValued": false,
+			"description": "The name of the User, suitable for display to end-users.",
+			"required":    false,
+			"caseExact":   false,
+			"mutability":  "readWrite",
+			"returned":    "default",
+			"uniqueness":  "none",
+		},
+		{
+			"name":        "nickName",
+			"type":        "string",
+			"multiValued": false,
+			"description": "The casual way to address the user in real life.",
+			"required":    false,
+			"caseExact":   false,
+			"mutability":  "readWrite",
+			"returned":    "default",
+			"uniqueness":  "none",
+		},
+		{
+			"name":        "profileUrl",
+			"type":        "reference",
+			"multiValued": false,
+			"description": "A fully qualified URL pointing to a page representing the User's online profile.",
+			"required":    false,
+			"caseExact":   false,
+			"mutability":  "readWrite",
+			"returned":    "default",
+			"uniqueness":  "none",
+			"referenceTypes": []string{"external"},
+		},
+		{
+			"name":        "title",
+			"type":        "string",
+			"multiValued": false,
+			"description": "The user's title, such as Vice President.",
+			"required":    false,
+			"caseExact":   false,
+			"mutability":  "readWrite",
+			"returned":    "default",
+			"uniqueness":  "none",
+		},
+		{
+			"name":        "userType",
+			"type":        "string",
+			"multiValued": false,
+			"description": "Used to identify the relationship between the organization and the user.",
+			"required":    false,
+			"caseExact":   false,
+			"mutability":  "readWrite",
+			"returned":    "default",
+			"uniqueness":  "none",
+		},
+		{
+			"name":        "preferredLanguage",
+			"type":        "string",
+			"multiValued": false,
+			"description": "Indicates the User's preferred written or spoken language.",
+			"required":    false,
+			"caseExact":   false,
+			"mutability":  "readWrite",
+			"returned":    "default",
+			"uniqueness":  "none",
+		},
+		{
+			"name":        "locale",
+			"type":        "string",
+			"multiValued": false,
+			"description": "Used to indicate the User's default location for purposes of localizing items such as currency, date time format, or numerical representations.",
+			"required":    false,
+			"caseExact":   false,
+			"mutability":  "readWrite",
+			"returned":    "default",
+			"uniqueness":  "none",
+		},
+		{
+			"name":        "timezone",
+			"type":        "string",
+			"multiValued": false,
+			"description": "The User's time zone in the 'Olson' time zone database format.",
+			"required":    false,
+			"caseExact":   false,
+			"mutability":  "readWrite",
+			"returned":    "default",
+			"uniqueness":  "none",
+		},
+		{
+			"name":        "active",
+			"type":        "boolean",
+			"multiValued": false,
+			"description": "A Boolean value indicating the User's administrative status.",
+			"required":    false,
+			"mutability":  "readWrite",
+			"returned":    "default",
+		},
+		{
+			"name":        "password",
+			"type":        "string",
+			"multiValued": false,
+			"description": "The User's cleartext password.",
+			"required":    false,
+			"caseExact":   false,
+			"mutability":  "writeOnly",
+			"returned":    "never",
+			"uniqueness":  "none",
+		},
+		{
+			"name":        "emails",
+			"type":        "complex",
+			"multiValued": true,
+			"description": "Email addresses for the user.",
+			"required":    false,
+			"mutability":  "readWrite",
+			"returned":    "default",
+			"uniqueness":  "none",
+			"subAttributes": []map[string]any{
+				{"name": "value", "type": "string", "multiValued": false, "description": "Email address value.", "required": false, "caseExact": false, "mutability": "readWrite", "returned": "default", "uniqueness": "none"},
+				{"name": "display", "type": "string", "multiValued": false, "description": "A human-readable name, primarily used for display purposes.", "required": false, "caseExact": false, "mutability": "readWrite", "returned": "default", "uniqueness": "none"},
+				{"name": "type", "type": "string", "multiValued": false, "description": "A label indicating the attribute's function.", "required": false, "caseExact": false, "canonicalValues": []string{"work", "home", "other"}, "mutability": "readWrite", "returned": "default", "uniqueness": "none"},
+				{"name": "primary", "type": "boolean", "multiValued": false, "description": "A Boolean value indicating the 'primary' or preferred attribute value for this attribute.", "required": false, "mutability": "readWrite", "returned": "default"},
+			},
+		},
+		{
+			"name":        "phoneNumbers",
+			"type":        "complex",
+			"multiValued": true,
+			"description": "Phone numbers for the User.",
+			"required":    false,
+			"mutability":  "readWrite",
+			"returned":    "default",
+			"subAttributes": []map[string]any{
+				{"name": "value", "type": "string", "multiValued": false, "description": "Phone number value.", "required": false, "caseExact": false, "mutability": "readWrite", "returned": "default", "uniqueness": "none"},
+				{"name": "display", "type": "string", "multiValued": false, "description": "A human-readable name, primarily used for display purposes.", "required": false, "caseExact": false, "mutability": "readWrite", "returned": "default", "uniqueness": "none"},
+				{"name": "type", "type": "string", "multiValued": false, "description": "A label indicating the attribute's function.", "required": false, "caseExact": false, "canonicalValues": []string{"work", "home", "mobile", "fax", "pager", "other"}, "mutability": "readWrite", "returned": "default", "uniqueness": "none"},
+				{"name": "primary", "type": "boolean", "multiValued": false, "description": "A Boolean value indicating the 'primary' or preferred attribute value for this attribute.", "required": false, "mutability": "readWrite", "returned": "default"},
+			},
+		},
+		{
+			"name":        "addresses",
+			"type":        "complex",
+			"multiValued": true,
+			"description": "A physical mailing address for this User.",
+			"required":    false,
+			"mutability":  "readWrite",
+			"returned":    "default",
+			"uniqueness":  "none",
+			"subAttributes": []map[string]any{
+				{"name": "formatted", "type": "string", "multiValued": false, "description": "The full mailing address, formatted for display or use with a mailing label.", "required": false, "caseExact": false, "mutability": "readWrite", "returned": "default", "uniqueness": "none"},
+				{"name": "streetAddress", "type": "string", "multiValued": false, "description": "The full street address component.", "required": false, "caseExact": false, "mutability": "readWrite", "returned": "default", "uniqueness": "none"},
+				{"name": "locality", "type": "string", "multiValued": false, "description": "The city or locality component.", "required": false, "caseExact": false, "mutability": "readWrite", "returned": "default", "uniqueness": "none"},
+				{"name": "region", "type": "string", "multiValued": false, "description": "The state or region component.", "required": false, "caseExact": false, "mutability": "readWrite", "returned": "default", "uniqueness": "none"},
+				{"name": "postalCode", "type": "string", "multiValued": false, "description": "The zip code or postal code component.", "required": false, "caseExact": false, "mutability": "readWrite", "returned": "default", "uniqueness": "none"},
+				{"name": "country", "type": "string", "multiValued": false, "description": "The country name component.", "required": false, "caseExact": false, "mutability": "readWrite", "returned": "default", "uniqueness": "none"},
+				{"name": "type", "type": "string", "multiValued": false, "description": "A label indicating the attribute's function.", "required": false, "caseExact": false, "canonicalValues": []string{"work", "home", "other"}, "mutability": "readWrite", "returned": "default", "uniqueness": "none"},
+				{"name": "primary", "type": "boolean", "multiValued": false, "description": "A Boolean value indicating the 'primary' or preferred attribute value for this attribute.", "required": false, "mutability": "readWrite", "returned": "default"},
+			},
+		},
+		{
+			"name":        "groups",
+			"type":        "complex",
+			"multiValued": true,
+			"description": "A list of groups to which the user belongs.",
+			"required":    false,
+			"mutability":  "readOnly",
+			"returned":    "default",
+			"subAttributes": []map[string]any{
+				{"name": "value", "type": "string", "multiValued": false, "description": "The identifier of the User's group.", "required": false, "caseExact": false, "mutability": "readOnly", "returned": "default", "uniqueness": "none"},
+				{"name": "$ref", "type": "reference", "multiValued": false, "description": "The URI of the corresponding 'Group' resource to which the user belongs.", "required": false, "caseExact": false, "mutability": "readOnly", "returned": "default", "uniqueness": "none", "referenceTypes": []string{"User", "Group"}},
+				{"name": "display", "type": "string", "multiValued": false, "description": "A human-readable name, primarily used for display purposes.", "required": false, "caseExact": false, "mutability": "readOnly", "returned": "default", "uniqueness": "none"},
+				{"name": "type", "type": "string", "multiValued": false, "description": "A label indicating the attribute's function.", "required": false, "caseExact": false, "canonicalValues": []string{"direct", "indirect"}, "mutability": "readOnly", "returned": "default", "uniqueness": "none"},
+			},
+		},
+		{
+			"name":        "entitlements",
+			"type":        "complex",
+			"multiValued": true,
+			"description": "A list of entitlements for the User that represent a thing the User has.",
+			"required":    false,
+			"mutability":  "readWrite",
+			"returned":    "default",
+			"subAttributes": []map[string]any{
+				{"name": "value", "type": "string", "multiValued": false, "description": "The value of an entitlement.", "required": false, "caseExact": false, "mutability": "readWrite", "returned": "default", "uniqueness": "none"},
+				{"name": "display", "type": "string", "multiValued": false, "description": "A human-readable name, primarily used for display purposes.", "required": false, "caseExact": false, "mutability": "readWrite", "returned": "default", "uniqueness": "none"},
+				{"name": "type", "type": "string", "multiValued": false, "description": "A label indicating the attribute's function.", "required": false, "caseExact": false, "mutability": "readWrite", "returned": "default", "uniqueness": "none"},
+				{"name": "primary", "type": "boolean", "multiValued": false, "description": "A Boolean value indicating the 'primary' or preferred attribute value for this attribute.", "required": false, "mutability": "readWrite", "returned": "default"},
+			},
+		},
+		{
+			"name":        "roles",
+			"type":        "complex",
+			"multiValued": true,
+			"description": "A list of roles for the User that collectively represent who the User is.",
+			"required":    false,
+			"mutability":  "readWrite",
+			"returned":    "default",
+			"subAttributes": []map[string]any{
+				{"name": "value", "type": "string", "multiValued": false, "description": "The value of a role.", "required": false, "caseExact": false, "mutability": "readWrite", "returned": "default", "uniqueness": "none"},
+				{"name": "display", "type": "string", "multiValued": false, "description": "A human-readable name, primarily used for display purposes.", "required": false, "caseExact": false, "mutability": "readWrite", "returned": "default", "uniqueness": "none"},
+				{"name": "type", "type": "string", "multiValued": false, "description": "A label indicating the attribute's function.", "required": false, "caseExact": false, "mutability": "readWrite", "returned": "default", "uniqueness": "none"},
+				{"name": "primary", "type": "boolean", "multiValued": false, "description": "A Boolean value indicating the 'primary' or preferred attribute value for this attribute.", "required": false, "mutability": "readWrite", "returned": "default"},
+			},
+		},
+	},
+	"meta": map[string]any{
+		"resourceType": "Schema",
+		"location":     "/v1/scim/{scim_directory_id}/Schemas/urn:ietf:params:scim:schemas:core:2.0:User",
+	},
+}
+
+var scimGroupSchema = map[string]any{
+	"id":          "urn:ietf:params:scim:schemas:core:2.0:Group",
+	"name":        "Group",
+	"description": "Group",
+	"attributes": []map[string]any{
+		{
+			"name":        "displayName",
+			"type":        "string",
+			"multiValued": false,
+			"description": "A human-readable name for the Group.",
+			"required":    true,
+			"caseExact":   false,
+			"mutability":  "readWrite",
+			"returned":    "default",
+			"uniqueness":  "none",
+		},
+		{
+			"name":        "members",
+			"type":        "complex",
+			"multiValued": true,
+			"description": "A list of members of the Group.",
+			"required":    false,
+			"mutability":  "readWrite",
+			"returned":    "default",
+			"subAttributes": []map[string]any{
+				{"name": "value", "type": "string", "multiValued": false, "description": "Identifier of the member of this Group.", "required": false, "caseExact": false, "mutability": "immutable", "returned": "default", "uniqueness": "none"},
+				{"name": "$ref", "type": "reference", "multiValued": false, "description": "The URI corresponding to a SCIM resource that is a member of this Group.", "required": false, "caseExact": false, "mutability": "immutable", "returned": "default", "uniqueness": "none", "referenceTypes": []string{"User", "Group"}},
+				{"name": "type", "type": "string", "multiValued": false, "description": "A label indicating the type of resource.", "required": false, "caseExact": false, "canonicalValues": []string{"User", "Group"}, "mutability": "immutable", "returned": "default", "uniqueness": "none"},
+				{"name": "display", "type": "string", "multiValued": false, "description": "A human-readable name for the member.", "required": false, "caseExact": false, "mutability": "readOnly", "returned": "default", "uniqueness": "none"},
+			},
+		},
+	},
+	"meta": map[string]any{
+		"resourceType": "Schema",
+		"location":     "/v1/scim/{scim_directory_id}/Schemas/urn:ietf:params:scim:schemas:core:2.0:Group",
+	},
+}
+
+var scimEnterpriseUserSchema = map[string]any{
+	"id":          "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
+	"name":        "EnterpriseUser",
+	"description": "Enterprise User",
+	"attributes": []map[string]any{
+		{
+			"name":        "employeeNumber",
+			"type":        "string",
+			"multiValued": false,
+			"description": "Numeric or alphanumeric identifier assigned to a person, typically based on order of hire or association with an organization.",
+			"required":    false,
+			"caseExact":   false,
+			"mutability":  "readWrite",
+			"returned":    "default",
+			"uniqueness":  "none",
+		},
+		{
+			"name":        "costCenter",
+			"type":        "string",
+			"multiValued": false,
+			"description": "Identifies the name of a cost center.",
+			"required":    false,
+			"caseExact":   false,
+			"mutability":  "readWrite",
+			"returned":    "default",
+			"uniqueness":  "none",
+		},
+		{
+			"name":        "organization",
+			"type":        "string",
+			"multiValued": false,
+			"description": "Identifies the name of an organization.",
+			"required":    false,
+			"caseExact":   false,
+			"mutability":  "readWrite",
+			"returned":    "default",
+			"uniqueness":  "none",
+		},
+		{
+			"name":        "division",
+			"type":        "string",
+			"multiValued": false,
+			"description": "Identifies the name of a division.",
+			"required":    false,
+			"caseExact":   false,
+			"mutability":  "readWrite",
+			"returned":    "default",
+			"uniqueness":  "none",
+		},
+		{
+			"name":        "department",
+			"type":        "string",
+			"multiValued": false,
+			"description": "Identifies the name of a department.",
+			"required":    false,
+			"caseExact":   false,
+			"mutability":  "readWrite",
+			"returned":    "default",
+			"uniqueness":  "none",
+		},
+		{
+			"name":        "manager",
+			"type":        "complex",
+			"multiValued": false,
+			"description": "The User's manager.",
+			"required":    false,
+			"mutability":  "readWrite",
+			"returned":    "default",
+			"subAttributes": []map[string]any{
+				{"name": "value", "type": "string", "multiValued": false, "description": "The id of the SCIM resource representing the User's manager.", "required": false, "caseExact": false, "mutability": "readWrite", "returned": "default", "uniqueness": "none"},
+				{"name": "$ref", "type": "reference", "multiValued": false, "description": "The URI of the SCIM resource representing the User's manager.", "required": false, "caseExact": false, "mutability": "readWrite", "returned": "default", "uniqueness": "none", "referenceTypes": []string{"User"}},
+				{"name": "displayName", "type": "string", "multiValued": false, "description": "The displayName of the User's manager.", "required": false, "caseExact": false, "mutability": "readOnly", "returned": "default", "uniqueness": "none"},
+			},
+		},
+	},
+	"meta": map[string]any{
+		"resourceType": "Schema",
+		"location":     "/v1/scim/{scim_directory_id}/Schemas/urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
+	},
+}
+
+func (s *Service) scimGetSchemas(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	scimDirectoryID := mux.Vars(r)["scim_directory_id"]
+
+	if err := s.scimVerifyBearerToken(ctx, scimDirectoryID, r.Header.Get("Authorization")); err != nil {
+		if errors.Is(err, store.ErrAuthSCIMBadBearerToken) {
+			http.Error(w, "invalid bearer token", http.StatusUnauthorized)
+			return err
+		}
+		panic(err)
+	}
+
+	// Build schemas with correct location URLs
+	baseURL := fmt.Sprintf("/v1/scim/%s", scimDirectoryID)
+
+	userSchema := copySchemaWithLocation(scimUserSchema, baseURL)
+	groupSchema := copySchemaWithLocation(scimGroupSchema, baseURL)
+	enterpriseUserSchema := copySchemaWithLocation(scimEnterpriseUserSchema, baseURL)
+
+	schemas := []any{userSchema, groupSchema, enterpriseUserSchema}
+
+	w.Header().Set("Content-Type", "application/scim+json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(map[string]any{
+		"schemas":      []string{"urn:ietf:params:scim:api:messages:2.0:ListResponse"},
+		"totalResults": len(schemas),
+		"Resources":    schemas,
+	}); err != nil {
+		panic(err)
+	}
+	return nil
+}
+
+func (s *Service) scimGetSchema(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	scimDirectoryID := mux.Vars(r)["scim_directory_id"]
+	schemaID := mux.Vars(r)["schema_id"]
+
+	if err := s.scimVerifyBearerToken(ctx, scimDirectoryID, r.Header.Get("Authorization")); err != nil {
+		if errors.Is(err, store.ErrAuthSCIMBadBearerToken) {
+			http.Error(w, "invalid bearer token", http.StatusUnauthorized)
+			return err
+		}
+		panic(err)
+	}
+
+	baseURL := fmt.Sprintf("/v1/scim/%s", scimDirectoryID)
+
+	var schema map[string]any
+	switch schemaID {
+	case "urn:ietf:params:scim:schemas:core:2.0:User":
+		schema = copySchemaWithLocation(scimUserSchema, baseURL)
+	case "urn:ietf:params:scim:schemas:core:2.0:Group":
+		schema = copySchemaWithLocation(scimGroupSchema, baseURL)
+	case "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User":
+		schema = copySchemaWithLocation(scimEnterpriseUserSchema, baseURL)
+	default:
+		w.Header().Set("Content-Type", "application/scim+json")
+		w.WriteHeader(http.StatusNotFound)
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			"schemas": []string{"urn:ietf:params:scim:api:messages:2.0:Error"},
+			"detail":  fmt.Sprintf("Schema %q not found", schemaID),
+			"status":  404,
+		}); err != nil {
+			panic(err)
+		}
+		return nil
+	}
+
+	schema["schemas"] = []string{"urn:ietf:params:scim:schemas:core:2.0:Schema"}
+
+	w.Header().Set("Content-Type", "application/scim+json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(schema); err != nil {
+		panic(err)
+	}
+	return nil
+}
+
+func (s *Service) scimGetResourceTypes(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	scimDirectoryID := mux.Vars(r)["scim_directory_id"]
+
+	if err := s.scimVerifyBearerToken(ctx, scimDirectoryID, r.Header.Get("Authorization")); err != nil {
+		if errors.Is(err, store.ErrAuthSCIMBadBearerToken) {
+			http.Error(w, "invalid bearer token", http.StatusUnauthorized)
+			return err
+		}
+		panic(err)
+	}
+
+	baseURL := fmt.Sprintf("/v1/scim/%s", scimDirectoryID)
+
+	resourceTypes := []map[string]any{
+		{
+			"schemas":     []string{"urn:ietf:params:scim:schemas:core:2.0:ResourceType"},
+			"id":          "User",
+			"name":        "User",
+			"endpoint":    "/Users",
+			"description": "User Account",
+			"schema":      "urn:ietf:params:scim:schemas:core:2.0:User",
+			"schemaExtensions": []map[string]any{
+				{
+					"schema":   "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
+					"required": false,
+				},
+			},
+			"meta": map[string]any{
+				"location":     fmt.Sprintf("%s/ResourceTypes/User", baseURL),
+				"resourceType": "ResourceType",
+			},
+		},
+		{
+			"schemas":     []string{"urn:ietf:params:scim:schemas:core:2.0:ResourceType"},
+			"id":          "Group",
+			"name":        "Group",
+			"endpoint":    "/Groups",
+			"description": "Group",
+			"schema":      "urn:ietf:params:scim:schemas:core:2.0:Group",
+			"meta": map[string]any{
+				"location":     fmt.Sprintf("%s/ResourceTypes/Group", baseURL),
+				"resourceType": "ResourceType",
+			},
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/scim+json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(map[string]any{
+		"schemas":      []string{"urn:ietf:params:scim:api:messages:2.0:ListResponse"},
+		"totalResults": len(resourceTypes),
+		"Resources":    resourceTypes,
+	}); err != nil {
+		panic(err)
+	}
+	return nil
+}
+
+func (s *Service) scimGetResourceType(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	scimDirectoryID := mux.Vars(r)["scim_directory_id"]
+	resourceTypeID := mux.Vars(r)["resource_type_id"]
+
+	if err := s.scimVerifyBearerToken(ctx, scimDirectoryID, r.Header.Get("Authorization")); err != nil {
+		if errors.Is(err, store.ErrAuthSCIMBadBearerToken) {
+			http.Error(w, "invalid bearer token", http.StatusUnauthorized)
+			return err
+		}
+		panic(err)
+	}
+
+	baseURL := fmt.Sprintf("/v1/scim/%s", scimDirectoryID)
+
+	var resourceType map[string]any
+	switch resourceTypeID {
+	case "User":
+		resourceType = map[string]any{
+			"schemas":     []string{"urn:ietf:params:scim:schemas:core:2.0:ResourceType"},
+			"id":          "User",
+			"name":        "User",
+			"endpoint":    "/Users",
+			"description": "User Account",
+			"schema":      "urn:ietf:params:scim:schemas:core:2.0:User",
+			"schemaExtensions": []map[string]any{
+				{
+					"schema":   "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
+					"required": false,
+				},
+			},
+			"meta": map[string]any{
+				"location":     fmt.Sprintf("%s/ResourceTypes/User", baseURL),
+				"resourceType": "ResourceType",
+			},
+		}
+	case "Group":
+		resourceType = map[string]any{
+			"schemas":     []string{"urn:ietf:params:scim:schemas:core:2.0:ResourceType"},
+			"id":          "Group",
+			"name":        "Group",
+			"endpoint":    "/Groups",
+			"description": "Group",
+			"schema":      "urn:ietf:params:scim:schemas:core:2.0:Group",
+			"meta": map[string]any{
+				"location":     fmt.Sprintf("%s/ResourceTypes/Group", baseURL),
+				"resourceType": "ResourceType",
+			},
+		}
+	default:
+		w.Header().Set("Content-Type", "application/scim+json")
+		w.WriteHeader(http.StatusNotFound)
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			"schemas": []string{"urn:ietf:params:scim:api:messages:2.0:Error"},
+			"detail":  fmt.Sprintf("ResourceType %q not found", resourceTypeID),
+			"status":  404,
+		}); err != nil {
+			panic(err)
+		}
+		return nil
+	}
+
+	w.Header().Set("Content-Type", "application/scim+json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(resourceType); err != nil {
+		panic(err)
+	}
+	return nil
+}
+
+// copySchemaWithLocation creates a deep copy of a schema with the correct location URL.
+// Deep copy is necessary to prevent concurrent modification issues and ensure
+// the original schema remains unchanged.
+func copySchemaWithLocation(schema map[string]any, baseURL string) map[string]any {
+	// Deep copy via JSON marshal/unmarshal to handle nested maps and slices
+	data, err := json.Marshal(schema)
+	if err != nil {
+		panic(fmt.Errorf("marshal schema for deep copy: %w", err))
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal(data, &result); err != nil {
+		panic(fmt.Errorf("unmarshal schema for deep copy: %w", err))
+	}
+
+	// Update meta with correct location
+	schemaID := schema["id"].(string)
+	result["meta"] = map[string]any{
+		"resourceType": "Schema",
+		"location":     fmt.Sprintf("%s/Schemas/%s", baseURL, schemaID),
+	}
+
+	return result
+}
+
+func (s *Service) scimGetServiceProviderConfig(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	scimDirectoryID := mux.Vars(r)["scim_directory_id"]
+
+	if err := s.scimVerifyBearerToken(ctx, scimDirectoryID, r.Header.Get("Authorization")); err != nil {
+		if errors.Is(err, store.ErrAuthSCIMBadBearerToken) {
+			http.Error(w, "invalid bearer token", http.StatusUnauthorized)
+			return err
+		}
+		panic(err)
+	}
+
+	baseURL := fmt.Sprintf("/v1/scim/%s", scimDirectoryID)
+
+	// ServiceProviderConfig per RFC 7643 Section 5
+	config := map[string]any{
+		"schemas": []string{"urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"},
+		"documentationUri": "https://www.rfc-editor.org/rfc/rfc7644",
+		"patch": map[string]any{
+			"supported": true,
+		},
+		"bulk": map[string]any{
+			"supported":      false,
+			"maxOperations":  0,
+			"maxPayloadSize": 0,
+		},
+		"filter": map[string]any{
+			"supported":  true,
+			"maxResults": 200,
+		},
+		"changePassword": map[string]any{
+			"supported": false,
+		},
+		"sort": map[string]any{
+			"supported": false,
+		},
+		"etag": map[string]any{
+			"supported": false,
+		},
+		"authenticationSchemes": []map[string]any{
+			{
+				"type":             "oauthbearertoken",
+				"name":             "OAuth Bearer Token",
+				"description":      "Authentication scheme using the OAuth Bearer Token Standard",
+				"specUri":          "https://www.rfc-editor.org/rfc/rfc6750",
+				"documentationUri": "https://www.rfc-editor.org/rfc/rfc6750",
+			},
+		},
+		"meta": map[string]any{
+			"location":     fmt.Sprintf("%s/ServiceProviderConfig", baseURL),
+			"resourceType": "ServiceProviderConfig",
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/scim+json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(config); err != nil {
+		panic(err)
+	}
+	return nil
 }
