@@ -346,28 +346,28 @@ func boolPtr(b bool) *bool {
 	return &b
 }
 
-// mockSCIMStore implements the store methods needed for SCIM handler tests
-type mockSCIMStore struct {
+// MockSCIMStore implements the store methods needed for SCIM handler tests
+type MockSCIMStore struct {
 	GetSCIMUserIncludeDeletedFunc func(ctx context.Context, req *store.AuthGetSCIMUserIncludeDeletedRequest) (*ssoreadyv1.SCIMUser, error)
 	UpdateSCIMUserFunc            func(ctx context.Context, req *store.AuthUpdateSCIMUserRequest) (*store.AuthUpdateSCIMUserResponse, error)
 	GetSCIMDirectoryDomainsFunc   func(ctx context.Context, scimDirectoryID string) ([]string, error)
 }
 
-func (m *mockSCIMStore) AuthGetSCIMUserIncludeDeleted(ctx context.Context, req *store.AuthGetSCIMUserIncludeDeletedRequest) (*ssoreadyv1.SCIMUser, error) {
+func (m *MockSCIMStore) AuthGetSCIMUserIncludeDeleted(ctx context.Context, req *store.AuthGetSCIMUserIncludeDeletedRequest) (*ssoreadyv1.SCIMUser, error) {
 	if m.GetSCIMUserIncludeDeletedFunc != nil {
 		return m.GetSCIMUserIncludeDeletedFunc(ctx, req)
 	}
 	return nil, nil
 }
 
-func (m *mockSCIMStore) AuthUpdateSCIMUser(ctx context.Context, req *store.AuthUpdateSCIMUserRequest) (*store.AuthUpdateSCIMUserResponse, error) {
+func (m *MockSCIMStore) AuthUpdateSCIMUser(ctx context.Context, req *store.AuthUpdateSCIMUserRequest) (*store.AuthUpdateSCIMUserResponse, error) {
 	if m.UpdateSCIMUserFunc != nil {
 		return m.UpdateSCIMUserFunc(ctx, req)
 	}
 	return nil, nil
 }
 
-func (m *mockSCIMStore) AuthGetSCIMDirectoryOrganizationDomains(ctx context.Context, scimDirectoryID string) ([]string, error) {
+func (m *MockSCIMStore) AuthGetSCIMDirectoryOrganizationDomains(ctx context.Context, scimDirectoryID string) ([]string, error) {
 	if m.GetSCIMDirectoryDomainsFunc != nil {
 		return m.GetSCIMDirectoryDomainsFunc(ctx, scimDirectoryID)
 	}
@@ -375,7 +375,7 @@ func (m *mockSCIMStore) AuthGetSCIMDirectoryOrganizationDomains(ctx context.Cont
 }
 
 func TestScimPatchUser_DeletedUser_Returns404(t *testing.T) {
-	mockStore := &mockSCIMStore{
+	mockStore := &MockSCIMStore{
 		GetSCIMUserIncludeDeletedFunc: func(ctx context.Context, req *store.AuthGetSCIMUserIncludeDeletedRequest) (*ssoreadyv1.SCIMUser, error) {
 			attrs, _ := structpb.NewStruct(map[string]any{"active": false})
 			return &ssoreadyv1.SCIMUser{
@@ -406,7 +406,7 @@ func TestScimPatchUser_DeletedUser_Returns404(t *testing.T) {
 }
 
 func TestScimPatchUser_NonExistentUser_Returns404(t *testing.T) {
-	mockStore := &mockSCIMStore{
+	mockStore := &MockSCIMStore{
 		GetSCIMUserIncludeDeletedFunc: func(ctx context.Context, req *store.AuthGetSCIMUserIncludeDeletedRequest) (*ssoreadyv1.SCIMUser, error) {
 			return nil, store.ErrSCIMUserNotFound
 		},
@@ -429,7 +429,7 @@ func TestScimPatchUser_NonExistentUser_Returns404(t *testing.T) {
 }
 
 func TestScimUpdateUser_DeletedUser_Returns404(t *testing.T) {
-	mockStore := &mockSCIMStore{
+	mockStore := &MockSCIMStore{
 		UpdateSCIMUserFunc: func(ctx context.Context, req *store.AuthUpdateSCIMUserRequest) (*store.AuthUpdateSCIMUserResponse, error) {
 			return nil, store.ErrSCIMUserNotFound
 		},
@@ -455,7 +455,7 @@ func TestScimUpdateUser_DeletedUser_Returns404(t *testing.T) {
 }
 
 func TestScimUpdateUser_NonExistentUser_Returns404(t *testing.T) {
-	mockStore := &mockSCIMStore{
+	mockStore := &MockSCIMStore{
 		UpdateSCIMUserFunc: func(ctx context.Context, req *store.AuthUpdateSCIMUserRequest) (*store.AuthUpdateSCIMUserResponse, error) {
 			return nil, store.ErrSCIMUserNotFound
 		},
@@ -480,7 +480,7 @@ func TestScimUpdateUser_NonExistentUser_Returns404(t *testing.T) {
 }
 
 func TestScimPatchUser_ActiveUser_UpdatesSuccessfully(t *testing.T) {
-	mockStore := &mockSCIMStore{
+	mockStore := &MockSCIMStore{
 		GetSCIMUserIncludeDeletedFunc: func(ctx context.Context, req *store.AuthGetSCIMUserIncludeDeletedRequest) (*ssoreadyv1.SCIMUser, error) {
 			attrs, _ := structpb.NewStruct(map[string]any{"active": true})
 			return &ssoreadyv1.SCIMUser{
@@ -521,7 +521,7 @@ func TestScimPatchUser_ActiveUser_UpdatesSuccessfully(t *testing.T) {
 }
 
 func TestScimPatchUser_InactiveUser_UpdatesSuccessfully(t *testing.T) {
-	mockStore := &mockSCIMStore{
+	mockStore := &MockSCIMStore{
 		GetSCIMUserIncludeDeletedFunc: func(ctx context.Context, req *store.AuthGetSCIMUserIncludeDeletedRequest) (*ssoreadyv1.SCIMUser, error) {
 			// User with active=false (inactive) but NOT deleted
 			attrs, _ := structpb.NewStruct(map[string]any{"active": false})
@@ -570,7 +570,7 @@ func TestScimUpdateUser_ActiveUser_UpdatesSuccessfully(t *testing.T) {
 		Deleted:         false,
 	}
 
-	mockStore := &mockSCIMStore{
+	mockStore := &MockSCIMStore{
 		UpdateSCIMUserFunc: func(ctx context.Context, req *store.AuthUpdateSCIMUserRequest) (*store.AuthUpdateSCIMUserResponse, error) {
 			return &store.AuthUpdateSCIMUserResponse{
 				SCIMUser: updatedUser,
@@ -608,7 +608,7 @@ func TestScimUpdateUser_InactiveUser_UpdatesSuccessfully(t *testing.T) {
 		Attributes:      attrs,
 	}
 
-	mockStore := &mockSCIMStore{
+	mockStore := &MockSCIMStore{
 		UpdateSCIMUserFunc: func(ctx context.Context, req *store.AuthUpdateSCIMUserRequest) (*store.AuthUpdateSCIMUserResponse, error) {
 			return &store.AuthUpdateSCIMUserResponse{
 				SCIMUser: updatedUser,
