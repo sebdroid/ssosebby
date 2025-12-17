@@ -131,7 +131,8 @@ func (s *Service) scimGetUser(w http.ResponseWriter, r *http.Request) error {
 		SCIMUserID:      scimUserID,
 	})
 	if err != nil {
-		if errors.Is(err, store.ErrSCIMUserNotFound) {
+		// Return 404 for not found or invalid ID format (SCIM clients may probe with arbitrary IDs)
+		if errors.Is(err, store.ErrSCIMUserNotFound) || strings.Contains(err.Error(), "parse scim user id") {
 			w.WriteHeader(http.StatusNotFound)
 			return nil
 		}
@@ -299,7 +300,8 @@ func (s *Service) scimUpdateUser(w http.ResponseWriter, r *http.Request) error {
 		},
 	})
 	if err != nil {
-		if errors.Is(err, store.ErrSCIMUserNotFound) {
+		// Return 404 for not found or invalid ID format
+		if errors.Is(err, store.ErrSCIMUserNotFound) || strings.Contains(err.Error(), "parse scim user id") {
 			w.WriteHeader(http.StatusNotFound)
 			return nil
 		}
@@ -338,7 +340,8 @@ func (s *Service) scimPatchUser(w http.ResponseWriter, r *http.Request) error {
 		SCIMUserID:      scimUserID,
 	})
 	if err != nil {
-		if errors.Is(err, store.ErrSCIMUserNotFound) {
+		// Return 404 for not found or invalid ID format
+		if errors.Is(err, store.ErrSCIMUserNotFound) || strings.Contains(err.Error(), "parse scim user id") {
 			w.WriteHeader(http.StatusNotFound)
 			return nil
 		}
@@ -434,6 +437,11 @@ func (s *Service) scimDeleteUser(w http.ResponseWriter, r *http.Request) error {
 		SCIMDirectoryID: scimDirectoryID,
 		SCIMUserID:      scimUserID,
 	}); err != nil {
+		// Return 404 for invalid ID format (SCIM clients may probe with arbitrary IDs)
+		if strings.Contains(err.Error(), "parse scim user id") {
+			w.WriteHeader(http.StatusNotFound)
+			return nil
+		}
 		panic(err)
 	}
 
@@ -547,7 +555,8 @@ func (s *Service) scimGetGroup(w http.ResponseWriter, r *http.Request) error {
 		SCIMGroupID:     scimGroupID,
 	})
 	if err != nil {
-		if errors.Is(err, store.ErrSCIMGroupNotFound) {
+		// Return 404 for not found or invalid ID format
+		if errors.Is(err, store.ErrSCIMGroupNotFound) || strings.Contains(err.Error(), "parse scim group id") {
 			w.WriteHeader(http.StatusNotFound)
 			return nil
 		}
@@ -654,6 +663,11 @@ func (s *Service) scimDeleteGroup(w http.ResponseWriter, r *http.Request) error 
 		SCIMDirectoryID: scimDirectoryID,
 		SCIMGroupID:     scimGroupID,
 	}); err != nil {
+		// Return 404 for invalid ID format (SCIM clients may probe with arbitrary IDs)
+		if strings.Contains(err.Error(), "parse scim group id") {
+			w.WriteHeader(http.StatusNotFound)
+			return nil
+		}
 		panic(err)
 	}
 
