@@ -101,7 +101,9 @@ type AuthListSCIMUsersFilteredResponse struct {
 var ErrInvalidSCIMFilter = errors.New("store: invalid scim filter")
 
 func (s *Store) AuthListSCIMUsersFiltered(ctx context.Context, req *AuthListSCIMUsersFilteredRequest) (*AuthListSCIMUsersFilteredResponse, error) {
-	scimDirID, err := idformat.SCIMDirectory.Parse(req.SCIMDirectoryID)
+	var scimDirID uuid.UUID
+	var err error
+	scimDirID, err = idformat.SCIMDirectory.Parse(req.SCIMDirectoryID)
 	if err != nil {
 		return nil, fmt.Errorf("parse scim directory id: %w", err)
 	}
@@ -496,7 +498,9 @@ type AuthListSCIMGroupsFilteredResponse struct {
 }
 
 func (s *Store) AuthListSCIMGroupsFiltered(ctx context.Context, req *AuthListSCIMGroupsFilteredRequest) (*AuthListSCIMGroupsFilteredResponse, error) {
-	scimDirID, err := idformat.SCIMDirectory.Parse(req.SCIMDirectoryID)
+	var scimDirID uuid.UUID
+	var err error
+	scimDirID, err = idformat.SCIMDirectory.Parse(req.SCIMDirectoryID)
 	if err != nil {
 		return nil, fmt.Errorf("parse scim directory id: %w", err)
 	}
