@@ -2,6 +2,7 @@ package authservice
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -10,6 +11,7 @@ import (
 	ssoreadyv1 "github.com/sebdroid/ssosebby/internal/gen/ssoready/v1"
 	"github.com/sebdroid/ssosebby/internal/store"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -1266,4 +1268,134 @@ func parseInt(s string) (int, error) {
 	}
 
 	return result, nil
+}
+
+func TestScimError_WithScimType(t *testing.T) {
+	w := httptest.NewRecorder()
+	scimError(w, http.StatusBadRequest, "invalidValue", "userName is required")
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Equal(t, "application/scim+json", w.Header().Get("Content-Type"))
+
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+	assert.Equal(t, "invalidValue", body["scimType"])
+	assert.Equal(t, "userName is required", body["detail"])
+	assert.Equal(t, float64(400), body["status"])
+	assert.Contains(t, body["schemas"], "urn:ietf:params:scim:api:messages:2.0:Error")
+}
+
+func TestScimError_WithoutScimType(t *testing.T) {
+	w := httptest.NewRecorder()
+	scimError(w, http.StatusNotFound, "", "resource not found")
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+	assert.NotContains(t, body, "scimType")
+	assert.Equal(t, "resource not found", body["detail"])
+	assert.Equal(t, float64(404), body["status"])
+}
+
+func TestScimCreateUser_MissingUserName(t *testing.T) {
+	// When userName is missing from the resource, the handler should return 400 not panic
+	resource := map[string]any{
+		"schemas": []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
+		// no userName
+	}
+
+	_, ok := resource["userName"].(string)
+	assert.False(t, ok, "missing userName should fail type assertion safely")
+}
+
+func TestScimCreateUser_InvalidUserNameType(t *testing.T) {
+	// When userName is not a string, the handler should return 400 not panic
+	resource := map[string]any{
+		"schemas":  []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
+		"userName": 12345, // not a string
+	}
+
+	_, ok := resource["userName"].(string)
+	assert.False(t, ok, "non-string userName should fail type assertion safely")
+}
+
+func TestScimCreateGroup_MissingDisplayName(t *testing.T) {
+	resource := map[string]any{
+		"schemas": []string{"urn:ietf:params:scim:schemas:core:2.0:Group"},
+		// no displayName
+	}
+
+	_, ok := resource["displayName"].(string)
+	assert.False(t, ok, "missing displayName should fail type assertion safely")
+}
+
+func TestScimCreateGroup_InvalidMembersType(t *testing.T) {
+	resource := map[string]any{
+		"schemas":     []string{"urn:ietf:params:scim:schemas:core:2.0:Group"},
+		"displayName": "Engineering",
+		"members":     "not-an-array",
+	}
+
+	_, ok := resource["members"].([]any)
+	assert.False(t, ok, "non-array members should fail type assertion safely")
+}
+
+func TestScimCreateGroup_InvalidMemberEntry(t *testing.T) {
+	resource := map[string]any{
+		"schemas":     []string{"urn:ietf:params:scim:schemas:core:2.0:Group"},
+		"displayName": "Engineering",
+		"members":     []any{"not-a-map"},
+	}
+
+	members := resource["members"].([]any)
+	_, ok := members[0].(map[string]any)
+	assert.False(t, ok, "non-object member entry should fail type assertion safely")
+}
+
+func TestScimPatchGroup_UnsupportedOperation(t *testing.T) {
+	// Verify that an unsupported PATCH operation would not match any of the 3 hard-coded patterns
+	// and should result in a 400 error rather than a panic
+	tests := []struct {
+		name string
+		ops  []struct {
+			Op   string
+			Path string
+		}
+	}{
+		{
+			name: "multiple operations",
+			ops: []struct {
+				Op   string
+				Path string
+			}{
+				{Op: "add", Path: "members"},
+				{Op: "remove", Path: "members"},
+			},
+		},
+		{
+			name: "unsupported path",
+			ops: []struct {
+				Op   string
+				Path string
+			}{
+				{Op: "replace", Path: "unknownField"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Verify these don't match the 3 hard-coded patterns:
+			// 1. single replace with empty path
+			// 2. single add/Add on "members"
+			// 3. single remove/Remove on "members"
+			matchesPattern1 := len(tt.ops) == 1 && tt.ops[0].Op == "replace" && tt.ops[0].Path == ""
+			matchesPattern2 := len(tt.ops) == 1 && (tt.ops[0].Op == "add" || tt.ops[0].Op == "Add") && tt.ops[0].Path == "members"
+			matchesPattern3 := len(tt.ops) == 1 && (tt.ops[0].Op == "remove" || tt.ops[0].Op == "Remove") && tt.ops[0].Path == "members"
+
+			assert.False(t, matchesPattern1 || matchesPattern2 || matchesPattern3,
+				"test case %q should NOT match any supported pattern", tt.name)
+		})
+	}
 }

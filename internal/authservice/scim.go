@@ -19,6 +19,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/gorilla/mux"
 	"github.com/sebdroid/ssosebby/internal/emailaddr"
 	ssoreadyv1 "github.com/sebdroid/ssosebby/internal/gen/ssoready/v1"
@@ -87,17 +88,7 @@ func (s *Service) scimListUsers(w http.ResponseWriter, r *http.Request) error {
 	})
 	if err != nil {
 		if errors.Is(err, store.ErrInvalidSCIMFilter) {
-			// Return SCIM-compliant error for invalid filter
-			w.Header().Set("Content-Type", "application/scim+json")
-			w.WriteHeader(http.StatusBadRequest)
-			if err := json.NewEncoder(w).Encode(map[string]any{
-				"schemas":  []string{"urn:ietf:params:scim:api:messages:2.0:Error"},
-				"scimType": "invalidFilter",
-				"detail":   err.Error(),
-				"status":   400,
-			}); err != nil {
-				panic(err)
-			}
+			scimError(w, http.StatusBadRequest, "invalidFilter", err.Error())
 			return nil
 		}
 		panic(fmt.Errorf("store: %w", err))
@@ -134,7 +125,7 @@ func (s *Service) scimGetUser(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		// Return 404 for not found or invalid ID format (SCIM clients may probe with arbitrary IDs)
 		if errors.Is(err, store.ErrSCIMUserNotFound) || strings.Contains(err.Error(), "parse scim user id") {
-			w.WriteHeader(http.StatusNotFound)
+			scimError(w, http.StatusNotFound, "", "user not found")
 			return nil
 		}
 
@@ -162,7 +153,11 @@ func (s *Service) scimCreateUser(w http.ResponseWriter, r *http.Request) error {
 		panic(err)
 	}
 
-	userName := resource["userName"].(string) // todo this may panic
+	userName, ok := resource["userName"].(string)
+	if !ok || userName == "" {
+		scimError(w, http.StatusBadRequest, "invalidValue", "userName is required and must be a string")
+		return nil
+	}
 	delete(resource, "schemas")
 
 	emailDomain, err := emailaddr.Parse(userName)
@@ -237,16 +232,11 @@ func (s *Service) scimUpdateUser(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	if resource["userName"] == nil {
-		http.Error(w, "userName is required", http.StatusBadRequest)
-		return &badUsernameError{BadUsername: ""}
+	userName, ok := resource["userName"].(string)
+	if !ok || userName == "" {
+		scimError(w, http.StatusBadRequest, "invalidValue", "userName is required and must be a string")
+		return nil
 	}
-	if _, ok := resource["userName"]; !ok {
-		http.Error(w, "userName is required", http.StatusBadRequest)
-		return &badUsernameError{BadUsername: ""}
-	}
-
-	userName := resource["userName"].(string)
 
 	// ensure active defaults to true if omitted in request
 	if _, ok := resource["active"]; !ok {
@@ -303,7 +293,7 @@ func (s *Service) scimUpdateUser(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		// Return 404 for not found or invalid ID format
 		if errors.Is(err, store.ErrSCIMUserNotFound) || strings.Contains(err.Error(), "parse scim user id") {
-			w.WriteHeader(http.StatusNotFound)
+			scimError(w, http.StatusNotFound, "", "user not found")
 			return nil
 		}
 		return fmt.Errorf("store: %w", err)
@@ -343,7 +333,7 @@ func (s *Service) scimPatchUser(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		// Return 404 for not found or invalid ID format
 		if errors.Is(err, store.ErrSCIMUserNotFound) || strings.Contains(err.Error(), "parse scim user id") {
-			w.WriteHeader(http.StatusNotFound)
+			scimError(w, http.StatusNotFound, "", "user not found")
 			return nil
 		}
 		panic(fmt.Errorf("store: get scim user for patch: %w", err))
@@ -351,7 +341,7 @@ func (s *Service) scimPatchUser(w http.ResponseWriter, r *http.Request) error {
 
 	// Return 404 if user has been deleted
 	if scimUser.Deleted {
-		w.WriteHeader(http.StatusNotFound)
+		scimError(w, http.StatusNotFound, "", "user not found")
 		return nil
 	}
 
@@ -362,17 +352,7 @@ func (s *Service) scimPatchUser(w http.ResponseWriter, r *http.Request) error {
 
 	// apply patches
 	if err := scimpatch.Patch(patch.Operations, &scimUserResource); err != nil {
-		w.Header().Set("Content-Type", "application/scim+json")
-		w.WriteHeader(http.StatusBadRequest)
-		errorResponse := map[string]any{
-			"schemas":  []string{"urn:ietf:params:scim:api:messages:2.0:Error"},
-			"status":   "400",
-			"scimType": "invalidPath",
-			"detail":   fmt.Sprintf("Unsupported PATCH operation: %s", err.Error()),
-		}
-		if err := json.NewEncoder(w).Encode(errorResponse); err != nil {
-			panic(fmt.Errorf("encode error response: %w", err))
-		}
+		scimError(w, http.StatusBadRequest, "invalidPath", fmt.Sprintf("Unsupported PATCH operation: %s", err.Error()))
 		return nil
 	}
 
@@ -438,9 +418,9 @@ func (s *Service) scimDeleteUser(w http.ResponseWriter, r *http.Request) error {
 		SCIMDirectoryID: scimDirectoryID,
 		SCIMUserID:      scimUserID,
 	}); err != nil {
-		// Return 404 for invalid ID format (SCIM clients may probe with arbitrary IDs)
-		if strings.Contains(err.Error(), "parse scim user id") {
-			w.WriteHeader(http.StatusNotFound)
+		// Return 404 for invalid ID format or non-existent user
+		if strings.Contains(err.Error(), "parse scim user id") || strings.Contains(err.Error(), "get scim user") {
+			scimError(w, http.StatusNotFound, "", "user not found")
 			return nil
 		}
 		panic(err)
@@ -500,16 +480,7 @@ func (s *Service) scimListGroups(w http.ResponseWriter, r *http.Request) error {
 	})
 	if err != nil {
 		if errors.Is(err, store.ErrInvalidSCIMFilter) {
-			w.Header().Set("Content-Type", "application/scim+json")
-			w.WriteHeader(http.StatusBadRequest)
-			if err := json.NewEncoder(w).Encode(map[string]any{
-				"schemas":  []string{"urn:ietf:params:scim:api:messages:2.0:Error"},
-				"scimType": "invalidFilter",
-				"detail":   err.Error(),
-				"status":   400,
-			}); err != nil {
-				panic(err)
-			}
+			scimError(w, http.StatusBadRequest, "invalidFilter", err.Error())
 			return nil
 		}
 		panic(fmt.Errorf("store: %w", err))
@@ -558,7 +529,7 @@ func (s *Service) scimGetGroup(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		// Return 404 for not found or invalid ID format
 		if errors.Is(err, store.ErrSCIMGroupNotFound) || strings.Contains(err.Error(), "parse scim group id") {
-			w.WriteHeader(http.StatusNotFound)
+			scimError(w, http.StatusNotFound, "", "group not found")
 			return nil
 		}
 		panic(err)
@@ -597,15 +568,31 @@ func (s *Service) scimCreateGroup(w http.ResponseWriter, r *http.Request) error 
 
 	var memberSCIMUserIDs []string
 	if members, ok := resource["members"]; ok {
-		members := members.([]any)
-		for _, member := range members {
-			member := member.(map[string]any)
-			userID := member["value"].(string)
+		membersArr, ok := members.([]any)
+		if !ok {
+			scimError(w, http.StatusBadRequest, "invalidValue", "members must be an array")
+			return nil
+		}
+		for _, member := range membersArr {
+			memberMap, ok := member.(map[string]any)
+			if !ok {
+				scimError(w, http.StatusBadRequest, "invalidValue", "each member must be an object")
+				return nil
+			}
+			userID, ok := memberMap["value"].(string)
+			if !ok {
+				scimError(w, http.StatusBadRequest, "invalidValue", "each member must have a string value")
+				return nil
+			}
 			memberSCIMUserIDs = append(memberSCIMUserIDs, userID)
 		}
 	}
 
-	displayName := resource["displayName"].(string)
+	displayName, ok := resource["displayName"].(string)
+	if !ok || displayName == "" {
+		scimError(w, http.StatusBadRequest, "invalidValue", "displayName is required and must be a string")
+		return nil
+	}
 	delete(resource, "schemas")
 
 	// at this point, all remaining properties are user attributes
@@ -664,9 +651,9 @@ func (s *Service) scimDeleteGroup(w http.ResponseWriter, r *http.Request) error 
 		SCIMDirectoryID: scimDirectoryID,
 		SCIMGroupID:     scimGroupID,
 	}); err != nil {
-		// Return 404 for invalid ID format (SCIM clients may probe with arbitrary IDs)
-		if strings.Contains(err.Error(), "parse scim group id") {
-			w.WriteHeader(http.StatusNotFound)
+		// Return 404 for invalid ID format or non-existent group
+		if strings.Contains(err.Error(), "parse scim group id") || strings.Contains(err.Error(), "get scim group") {
+			scimError(w, http.StatusNotFound, "", "group not found")
 			return nil
 		}
 		panic(err)
@@ -697,15 +684,31 @@ func (s *Service) scimUpdateGroup(w http.ResponseWriter, r *http.Request) error 
 
 	var memberSCIMUserIDs []string
 	if resource["members"] != nil {
-		members := resource["members"].([]any)
-		for _, member := range members {
-			member := member.(map[string]any)
-			userID := member["value"].(string)
+		membersArr, ok := resource["members"].([]any)
+		if !ok {
+			scimError(w, http.StatusBadRequest, "invalidValue", "members must be an array")
+			return nil
+		}
+		for _, member := range membersArr {
+			memberMap, ok := member.(map[string]any)
+			if !ok {
+				scimError(w, http.StatusBadRequest, "invalidValue", "each member must be an object")
+				return nil
+			}
+			userID, ok := memberMap["value"].(string)
+			if !ok {
+				scimError(w, http.StatusBadRequest, "invalidValue", "each member must have a string value")
+				return nil
+			}
 			memberSCIMUserIDs = append(memberSCIMUserIDs, userID)
 		}
 	}
 
-	displayName := resource["displayName"].(string)
+	displayName, ok := resource["displayName"].(string)
+	if !ok || displayName == "" {
+		scimError(w, http.StatusBadRequest, "invalidValue", "displayName is required and must be a string")
+		return nil
+	}
 	delete(resource, "schemas")
 
 	// at this point, all remaining properties are user attributes
@@ -833,7 +836,28 @@ func (s *Service) scimPatchGroup(w http.ResponseWriter, r *http.Request) error {
 		return nil
 	}
 
-	panic("unsupported group PATCH operation type")
+	// Report to Sentry so we know when IdPs send unexpected PATCH patterns
+	if hub := sentry.GetHubFromContext(ctx); hub != nil {
+		hub.CaptureException(fmt.Errorf("scim: unsupported group PATCH operation type"))
+	}
+	scimError(w, http.StatusBadRequest, "invalidValue", "unsupported group PATCH operation type")
+	return nil
+}
+
+// scimError writes an RFC 7644 Section 3.12 compliant error response.
+// Pass scimType="" to omit it (e.g. for 404s where scimType is not applicable).
+func scimError(w http.ResponseWriter, status int, scimType, detail string) {
+	resp := map[string]any{
+		"schemas": []string{"urn:ietf:params:scim:api:messages:2.0:Error"},
+		"detail":  detail,
+		"status":  status,
+	}
+	if scimType != "" {
+		resp["scimType"] = scimType
+	}
+	w.Header().Set("Content-Type", "application/scim+json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(resp)
 }
 
 // scimUserToResource converts our representation of a scim user to its SCIM HTTP representation
@@ -1473,15 +1497,7 @@ func (s *Service) scimGetSchema(w http.ResponseWriter, r *http.Request) error {
 	case "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User":
 		schema = copySchemaWithLocation(scimEnterpriseUserSchema, baseURL)
 	default:
-		w.Header().Set("Content-Type", "application/scim+json")
-		w.WriteHeader(http.StatusNotFound)
-		if err := json.NewEncoder(w).Encode(map[string]any{
-			"schemas": []string{"urn:ietf:params:scim:api:messages:2.0:Error"},
-			"detail":  fmt.Sprintf("Schema %q not found", schemaID),
-			"status":  404,
-		}); err != nil {
-			panic(err)
-		}
+		scimError(w, http.StatusNotFound, "", fmt.Sprintf("Schema %q not found", schemaID))
 		return nil
 	}
 
@@ -1604,15 +1620,7 @@ func (s *Service) scimGetResourceType(w http.ResponseWriter, r *http.Request) er
 			},
 		}
 	default:
-		w.Header().Set("Content-Type", "application/scim+json")
-		w.WriteHeader(http.StatusNotFound)
-		if err := json.NewEncoder(w).Encode(map[string]any{
-			"schemas": []string{"urn:ietf:params:scim:api:messages:2.0:Error"},
-			"detail":  fmt.Sprintf("ResourceType %q not found", resourceTypeID),
-			"status":  404,
-		}); err != nil {
-			panic(err)
-		}
+		scimError(w, http.StatusNotFound, "", fmt.Sprintf("ResourceType %q not found", resourceTypeID))
 		return nil
 	}
 
