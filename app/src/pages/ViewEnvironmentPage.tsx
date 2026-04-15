@@ -9,9 +9,7 @@ import {
 import {
   appCreateOrganization,
   appListOrganizations,
-  createAPIKey,
   getEnvironment,
-  listAPIKeys,
   updateEnvironment,
 } from "@/gen/ssoready/v1/ssoready-SSOReadyService_connectquery";
 import {
@@ -34,10 +32,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
-  AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
@@ -58,24 +54,16 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useQueryClient } from "@tanstack/react-query";
-import { CircleAlert, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { InputTags } from "@/components/InputTags";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
 import { DocsLink } from "@/components/DocsLink";
 import { Title } from "@/components/Title";
 import { InfoTooltip } from "@/components/InfoTooltip";
 
 export function ViewEnvironmentPage() {
   const { environmentId } = useParams();
+  if (!environmentId) return null;
   const { data: environment } = useQuery(getEnvironment, {
     id: environmentId,
   });
@@ -88,7 +76,8 @@ export function ViewEnvironmentPage() {
     { environmentId, pageToken: "" },
     {
       pageParamKey: "pageToken",
-      getNextPageParam: (lastPage) => lastPage.nextPageToken || undefined,
+      getNextPageParam: (lastPage: { nextPageToken: string }) =>
+        lastPage.nextPageToken || undefined,
     },
   );
 

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   createAPIKey,
   createSAMLOAuthClient,
@@ -6,7 +6,7 @@ import {
   listAPIKeys,
   listSAMLOAuthClients,
 } from "@/gen/ssoready/v1/ssoready-SSOReadyService_connectquery";
-import { useNavigate, useParams } from "react-router";
+import { useParams } from "react-router";
 import {
   Card,
   CardContent,
@@ -39,13 +39,10 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { offset, useFloating, useTransitionStyles } from "@floating-ui/react";
-import { CircleAlert, Plus, CopyIcon } from "lucide-react";
+import { CircleAlert, Plus } from "lucide-react";
 import { z } from "zod";
-import { Environment } from "@/gen/ssoready/v1/ssoready_pb";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { toast } from "sonner";
 import {
   Form,
   FormControl,
@@ -55,8 +52,6 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { InputTags } from "@/components/InputTags";
 import { Switch } from "@/components/ui/switch";
 import { SecretCopier } from "@/components/SecretCopier";
 import { Title } from "@/components/Title";
@@ -73,6 +68,7 @@ export function ListAPIKeysPage() {
 
 function ListAPIKeysCard() {
   const { environmentId } = useParams();
+  if (!environmentId) return null;
   const {
     data: listAPIKeysResponses,
     fetchNextPage,
@@ -82,7 +78,8 @@ function ListAPIKeysCard() {
     { environmentId, pageToken: "" },
     {
       pageParamKey: "pageToken",
-      getNextPageParam: (lastPage) => lastPage.nextPageToken || undefined,
+      getNextPageParam: (lastPage: { nextPageToken: string }) =>
+        lastPage.nextPageToken || undefined,
     },
   );
 
@@ -321,6 +318,7 @@ function CreateAPIKeyButton() {
 
 function ListOAuthClientsCard() {
   const { environmentId } = useParams();
+  if (!environmentId) return null;
   const {
     data: listSAMLOAuthClientsResponses,
     fetchNextPage,
@@ -330,7 +328,8 @@ function ListOAuthClientsCard() {
     { environmentId, pageToken: "" },
     {
       pageParamKey: "pageToken",
-      getNextPageParam: (lastPage) => lastPage.nextPageToken || undefined,
+      getNextPageParam: (lastPage: { nextPageToken: string }) =>
+        lastPage.nextPageToken || undefined,
     },
   );
 

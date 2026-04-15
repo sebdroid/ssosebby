@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { useMatch, useNavigate, useParams } from "react-router";
+import { useNavigate, useParams } from "react-router";
 import {
   createConnectQueryKey,
   useInfiniteQuery,
@@ -23,7 +23,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Link } from "react-router-dom";
 import { DocsLink } from "@/components/DocsLink";
 import {
@@ -384,6 +383,7 @@ function EditSCIMDirectoryAlertDialog({
 
 function UsersTabContent() {
   const { environmentId, organizationId, scimDirectoryId } = useParams();
+  if (!environmentId || !organizationId || !scimDirectoryId) return null;
   const {
     data: listSCIMUsersResponses,
     fetchNextPage,
@@ -393,7 +393,8 @@ function UsersTabContent() {
     { scimDirectoryId, pageToken: "" },
     {
       pageParamKey: "pageToken",
-      getNextPageParam: (lastPage) => lastPage.nextPageToken || undefined,
+      getNextPageParam: (lastPage: { nextPageToken: string }) =>
+        lastPage.nextPageToken || undefined,
     },
   );
 
@@ -450,6 +451,7 @@ function UsersTabContent() {
 
 function GroupsTabContent() {
   const { environmentId, organizationId, scimDirectoryId } = useParams();
+  if (!environmentId || !organizationId || !scimDirectoryId) return null;
   const {
     data: listSCIMGroupsResponses,
     fetchNextPage,
@@ -459,7 +461,8 @@ function GroupsTabContent() {
     { scimDirectoryId, pageToken: "" },
     {
       pageParamKey: "pageToken",
-      getNextPageParam: (lastPage) => lastPage.nextPageToken || undefined,
+      getNextPageParam: (lastPage: { nextPageToken: string }) =>
+        lastPage.nextPageToken || undefined,
     },
   );
 
@@ -516,6 +519,7 @@ function GroupsTabContent() {
 
 function RequestsCard() {
   const { environmentId, organizationId, scimDirectoryId } = useParams();
+  if (!environmentId || !organizationId || !scimDirectoryId) return null;
   const {
     data: listSCIMRequestsResponses,
     fetchNextPage,
@@ -525,7 +529,8 @@ function RequestsCard() {
     { scimDirectoryId, pageToken: "" },
     {
       pageParamKey: "pageToken",
-      getNextPageParam: (lastPage) => lastPage.nextPageToken || undefined,
+      getNextPageParam: (lastPage: { nextPageToken: string }) =>
+        lastPage.nextPageToken || undefined,
     },
   );
 

@@ -18,7 +18,6 @@ import { useNavigate } from "react-router";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useConfig } from "@/config";
 import { useAnalytics } from "@/analytics";
-import { Helmet } from "react-helmet";
 import { Title } from "@/components/Title";
 
 export function LoginPage() {

@@ -34,13 +34,14 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { Title } from "@/components/Title";
-import { Dock } from "lucide-react";
 import { DocsLink } from "@/components/DocsLink";
 import { InfoTooltip } from "@/components/InfoTooltip";
 
 export function ViewSCIMUserPage() {
   const { environmentId, organizationId, scimDirectoryId, scimUserId } =
     useParams();
+  if (!environmentId || !organizationId || !scimDirectoryId || !scimUserId)
+    return null;
   const { data: scimUser } = useQuery(appGetSCIMUser, {
     id: scimUserId,
   });
@@ -56,7 +57,8 @@ export function ViewSCIMUserPage() {
     { scimDirectoryId, scimUserId, pageToken: "" },
     {
       pageParamKey: "pageToken",
-      getNextPageParam: (lastPage) => lastPage.nextPageToken || undefined,
+      getNextPageParam: (lastPage: { nextPageToken: string }) =>
+        lastPage.nextPageToken || undefined,
     },
   );
 

@@ -7,7 +7,6 @@ import {
 import {
   Table,
   TableBody,
-  TableCaption,
   TableCell,
   TableHead,
   TableHeader,
@@ -23,9 +22,6 @@ import {
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
-  ArrowRight,
-  ArrowRightIcon,
-  BookIcon,
   BookOpenTextIcon,
   PlusIcon,
 } from "lucide-react";
@@ -43,7 +39,8 @@ export function HomePage() {
     { pageToken: "" },
     {
       pageParamKey: "pageToken",
-      getNextPageParam: (lastPage) => lastPage.nextPageToken || undefined,
+      getNextPageParam: (lastPage: { nextPageToken: string }) =>
+        lastPage.nextPageToken || undefined,
     },
   );
   return (

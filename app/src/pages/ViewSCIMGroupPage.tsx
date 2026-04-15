@@ -40,6 +40,8 @@ import { InfoTooltip } from "@/components/InfoTooltip";
 export function ViewSCIMGroupPage() {
   const { environmentId, organizationId, scimDirectoryId, scimGroupId } =
     useParams();
+  if (!environmentId || !organizationId || !scimDirectoryId || !scimGroupId)
+    return null;
   const { data: scimGroup } = useQuery(appGetSCIMGroup, {
     id: scimGroupId,
   });
@@ -55,7 +57,8 @@ export function ViewSCIMGroupPage() {
     { scimDirectoryId, scimGroupId, pageToken: "" },
     {
       pageParamKey: "pageToken",
-      getNextPageParam: (lastPage) => lastPage.nextPageToken || undefined,
+      getNextPageParam: (lastPage: { nextPageToken: string }) =>
+        lastPage.nextPageToken || undefined,
     },
   );
 

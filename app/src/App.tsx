@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { Outlet, Route, Routes, useLocation } from "react-router";
+import { Route, Routes, useLocation } from "react-router";
 import { BrowserRouter } from "react-router-dom";
 import { LoginPage } from "./pages/LoginPage";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";

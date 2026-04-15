@@ -12,7 +12,6 @@ import {
   getSAMLOAuthClient,
 } from "@/gen/ssoready/v1/ssoready-SSOReadyService_connectquery";
 import { useNavigate, useParams } from "react-router";
-import { Heading } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Title } from "@/components/Title";
 import { DocsLink } from "@/components/DocsLink";
