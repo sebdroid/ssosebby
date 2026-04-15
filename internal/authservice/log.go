@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 )
@@ -27,9 +28,7 @@ func logHandlerIncludeRespHeaders(h http.Handler) http.Handler {
 		slog.InfoContext(r.Context(), "http_response", "method", r.Method, "path", r.URL.Path, "request_body", string(body), "status", recorder.Code, "response_headers", recorder.Header(), "response_body", recorder.Body.String())
 
 		// write out recorded response to w
-		for k, v := range recorder.Header() {
-			w.Header()[k] = v
-		}
+		maps.Copy(w.Header(), recorder.Header())
 		w.WriteHeader(recorder.Code)
 		if _, err := recorder.Body.WriteTo(w); err != nil {
 			panic(fmt.Errorf("write body: %w", err))
@@ -55,9 +54,7 @@ func logHandlerNoRespHeaders(h http.Handler) http.Handler {
 		slog.InfoContext(r.Context(), "http_response", "method", r.Method, "path", r.URL.Path, "request_body", string(body), "status", recorder.Code, "response_body", recorder.Body.String())
 
 		// write out recorded response to w
-		for k, v := range recorder.Header() {
-			w.Header()[k] = v
-		}
+		maps.Copy(w.Header(), recorder.Header())
 		w.WriteHeader(recorder.Code)
 		if _, err := recorder.Body.WriteTo(w); err != nil {
 			panic(fmt.Errorf("write body: %w", err))

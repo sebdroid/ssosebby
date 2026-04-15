@@ -3,6 +3,7 @@ package authninterceptor
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -46,10 +47,8 @@ var adminRPCs = []string{
 func New(s *store.Store) connect.UnaryInterceptorFunc {
 	return func(next connect.UnaryFunc) connect.UnaryFunc {
 		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
-			for _, rpc := range skipRPCs {
-				if req.Spec().Procedure == rpc {
-					return next(ctx, req)
-				}
+			if slices.Contains(skipRPCs, req.Spec().Procedure) {
+				return next(ctx, req)
 			}
 
 			authorization := req.Header().Get("Authorization")

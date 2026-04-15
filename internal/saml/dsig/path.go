@@ -137,7 +137,7 @@ func pathsEqual(a, b path) bool {
 	if len(a) != len(b) {
 		return false
 	}
-	for i := 0; i < len(a); i++ {
+	for i := range a {
 		if a[i].URI != b[i].URI || a[i].Local != b[i].Local {
 			return false
 		}

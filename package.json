@@ -7,11 +7,11 @@
     "dev:admin": "cd admin && npm run dev"
   },
   "dependencies": {
-    "@bufbuild/buf": "^1.55.1",
+    "@bufbuild/buf": "^1.67.0",
     "@bufbuild/protoc-gen-es": "^1.10.1",
-    "@connectrpc/protoc-gen-connect-es": "^1.6.1",
+    "@connectrpc/protoc-gen-connect-es": "^1.7.0",
     "@connectrpc/protoc-gen-connect-query": "^1.4.2",
-    "axios": "^1.10.0",
+    "axios": "^1.15.0",
     "dotenv-cli": "^7.4.4",
     "npm-run-all": "^4.1.5"
   }

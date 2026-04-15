@@ -278,6 +278,7 @@ func (s *Store) AuthGetSCIMUser(ctx context.Context, req *AuthGetSCIMUserRequest
 	return parseSCIMUser(qSCIMUser), nil
 }
 
+
 type AuthGetSCIMUserIncludeDeletedRequest struct {
 	SCIMDirectoryID string
 	SCIMUserID      string

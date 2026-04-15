@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -363,7 +364,7 @@ func (s *Service) scimPatchUser(w http.ResponseWriter, r *http.Request) error {
 	if err := scimpatch.Patch(patch.Operations, &scimUserResource); err != nil {
 		w.Header().Set("Content-Type", "application/scim+json")
 		w.WriteHeader(http.StatusBadRequest)
-		errorResponse := map[string]interface{}{
+		errorResponse := map[string]any{
 			"schemas":  []string{"urn:ietf:params:scim:api:messages:2.0:Error"},
 			"status":   "400",
 			"scimType": "invalidPath",
@@ -1035,9 +1036,7 @@ func (s *Service) scimMiddleware(f func(w http.ResponseWriter, r *http.Request) 
 		}
 
 		// write out recorded response to w
-		for k, v := range recorder.Header() {
-			w.Header()[k] = v
-		}
+		maps.Copy(w.Header(), recorder.Header())
 		w.WriteHeader(recorder.Code)
 		if _, err := recorder.Body.WriteTo(w); err != nil {
 			panic(fmt.Errorf("write reqBody: %w", err))
@@ -1109,15 +1108,15 @@ var scimUserSchema = map[string]any{
 			"uniqueness":  "none",
 		},
 		{
-			"name":        "profileUrl",
-			"type":        "reference",
-			"multiValued": false,
-			"description": "A fully qualified URL pointing to a page representing the User's online profile.",
-			"required":    false,
-			"caseExact":   false,
-			"mutability":  "readWrite",
-			"returned":    "default",
-			"uniqueness":  "none",
+			"name":           "profileUrl",
+			"type":           "reference",
+			"multiValued":    false,
+			"description":    "A fully qualified URL pointing to a page representing the User's online profile.",
+			"required":       false,
+			"caseExact":      false,
+			"mutability":     "readWrite",
+			"returned":       "default",
+			"uniqueness":     "none",
 			"referenceTypes": []string{"external"},
 		},
 		{
@@ -1666,7 +1665,7 @@ func (s *Service) scimGetServiceProviderConfig(w http.ResponseWriter, r *http.Re
 
 	// ServiceProviderConfig per RFC 7643 Section 5
 	config := map[string]any{
-		"schemas": []string{"urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"},
+		"schemas":          []string{"urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"},
 		"documentationUri": "https://www.rfc-editor.org/rfc/rfc7644",
 		"patch": map[string]any{
 			"supported": true,

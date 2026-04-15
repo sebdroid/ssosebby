@@ -817,6 +817,41 @@ func (q *Queries) AuthGetValidateData(ctx context.Context, id uuid.UUID) (AuthGe
 	return i, err
 }
 
+const authListSCIMGroupsForUser = `-- name: AuthListSCIMGroupsForUser :many
+select scim_groups.id, scim_groups.scim_directory_id, scim_groups.display_name, scim_groups.deleted, scim_groups.attributes
+from scim_groups
+         join scim_user_group_memberships on scim_user_group_memberships.scim_group_id = scim_groups.id
+where scim_user_group_memberships.scim_user_id = $1
+  and scim_groups.deleted = false
+order by scim_groups.id
+`
+
+func (q *Queries) AuthListSCIMGroupsForUser(ctx context.Context, scimUserID uuid.UUID) ([]ScimGroup, error) {
+	rows, err := q.db.Query(ctx, authListSCIMGroupsForUser, scimUserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ScimGroup
+	for rows.Next() {
+		var i ScimGroup
+		if err := rows.Scan(
+			&i.ID,
+			&i.ScimDirectoryID,
+			&i.DisplayName,
+			&i.Deleted,
+			&i.Attributes,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const authMarkSCIMGroupDeleted = `-- name: AuthMarkSCIMGroupDeleted :one
 update scim_groups
 set deleted = true
