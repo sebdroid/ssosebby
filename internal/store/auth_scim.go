@@ -463,7 +463,7 @@ func (s *Store) AuthDeleteSCIMUser(ctx context.Context, req *AuthDeleteSCIMUserR
 
 	scimUserID, err := idformat.SCIMUser.Parse(req.SCIMUserID)
 	if err != nil {
-		return fmt.Errorf("parse scim user id: %w", ErrBadSCIMUserID)
+		return fmt.Errorf("parse scim user id: %w: %w", ErrBadSCIMUserID, err)
 	}
 
 	// check that the user belongs to the scim dir
@@ -867,7 +867,7 @@ func (s *Store) AuthAddSCIMGroupMember(ctx context.Context, req *AuthAddSCIMGrou
 	for _, rawUserID := range req.SCIMUserIDs {
 		scimUserID, err := idformat.SCIMUser.Parse(rawUserID)
 		if err != nil {
-			return fmt.Errorf("parse scim user id: %w", ErrBadSCIMUserID)
+			return fmt.Errorf("parse scim user id: %w: %w", ErrBadSCIMUserID, err)
 		}
 
 		if _, err := q.AuthGetSCIMUserIncludeDeleted(ctx, queries.AuthGetSCIMUserIncludeDeletedParams{
@@ -926,7 +926,7 @@ func (s *Store) AuthRemoveSCIMGroupMember(ctx context.Context, req *AuthRemoveSC
 	for _, rawUserID := range req.SCIMUserIDs {
 		scimUserID, err := idformat.SCIMUser.Parse(rawUserID)
 		if err != nil {
-			return fmt.Errorf("parse scim user id: %w", ErrBadSCIMUserID)
+			return fmt.Errorf("parse scim user id: %w: %w", ErrBadSCIMUserID, err)
 		}
 
 		if _, err := q.AuthGetSCIMUserIncludeDeleted(ctx, queries.AuthGetSCIMUserIncludeDeletedParams{
@@ -970,7 +970,7 @@ func (s *Store) AuthDeleteSCIMGroup(ctx context.Context, req *AuthDeleteSCIMGrou
 
 	scimGroupID, err := idformat.SCIMGroup.Parse(req.SCIMGroupID)
 	if err != nil {
-		return fmt.Errorf("parse scim group id: %w", ErrBadSCIMGroupID)
+		return fmt.Errorf("parse scim group id: %w: %w", ErrBadSCIMGroupID, err)
 	}
 
 	// check that the group belongs to the scim dir
