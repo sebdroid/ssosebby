@@ -1,25 +1,13 @@
 import { z } from "zod";
-import { Environment } from "@/gen/ssoready/v1/ssoready_pb";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import React, { useCallback, useState } from "react";
+import React, { useCallback } from "react";
 import { createConnectQueryKey, useMutation } from "@connectrpc/connect-query";
 import {
   createEnvironment,
-  getEnvironment,
   listEnvironments,
-  updateEnvironment,
 } from "@/gen/ssoready/v1/ssoready-SSOReadyService_connectquery";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Form,

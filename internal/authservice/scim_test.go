@@ -2,6 +2,7 @@ package authservice
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -10,6 +11,7 @@ import (
 	ssoreadyv1 "github.com/sebdroid/ssosebby/internal/gen/ssoready/v1"
 	"github.com/sebdroid/ssosebby/internal/store"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -246,44 +248,44 @@ func TestSCIMCompoundFilterParsing(t *testing.T) {
 		{
 			name:         "email only",
 			filter:       `userName eq "john@example.com"`,
-			expectEmail:  strPtr("john@example.com"),
+			expectEmail:  new("john@example.com"),
 			expectActive: nil,
 		},
 		{
 			name:         "active only true",
 			filter:       `active eq true`,
 			expectEmail:  nil,
-			expectActive: boolPtr(true),
+			expectActive: new(true),
 		},
 		{
 			name:         "active only false",
 			filter:       `active eq false`,
 			expectEmail:  nil,
-			expectActive: boolPtr(false),
+			expectActive: new(false),
 		},
 		{
 			name:         "email and active true",
 			filter:       `userName eq "john@example.com" and active eq true`,
-			expectEmail:  strPtr("john@example.com"),
-			expectActive: boolPtr(true),
+			expectEmail:  new("john@example.com"),
+			expectActive: new(true),
 		},
 		{
 			name:         "active false and email",
 			filter:       `active eq false and userName eq "jane@example.com"`,
-			expectEmail:  strPtr("jane@example.com"),
-			expectActive: boolPtr(false),
+			expectEmail:  new("jane@example.com"),
+			expectActive: new(false),
 		},
 		{
 			name:         "email.value with active",
 			filter:       `email.value eq "test@example.com" and active eq true`,
-			expectEmail:  strPtr("test@example.com"),
-			expectActive: boolPtr(true),
+			expectEmail:  new("test@example.com"),
+			expectActive: new(true),
 		},
 		{
 			name:         "quoted active value",
 			filter:       `active eq "false" and userName eq "user@example.com"`,
-			expectEmail:  strPtr("user@example.com"),
-			expectActive: boolPtr(false),
+			expectEmail:  new("user@example.com"),
+			expectActive: new(false),
 		},
 	}
 
@@ -336,14 +338,6 @@ func mustNewStruct(m map[string]any) *structpb.Struct {
 		panic(err)
 	}
 	return s
-}
-
-func strPtr(s string) *string {
-	return &s
-}
-
-func boolPtr(b bool) *bool {
-	return &b
 }
 
 // MockSCIMStore implements the store methods needed for SCIM handler tests
@@ -1163,10 +1157,7 @@ func TestScimCountLimitBehavior(t *testing.T) {
 			// Simulate the limit calculation logic from store layer
 			limit := store.DefaultSCIMPageSize
 			if tt.requestCount > 0 {
-				limit = tt.requestCount
-				if limit > store.MaxSCIMPageSize {
-					limit = store.MaxSCIMPageSize
-				}
+				limit = min(tt.requestCount, store.MaxSCIMPageSize)
 			}
 
 			assert.Equal(t, tt.expectedLimit, limit, "Limit value mismatch")
@@ -1268,3 +1259,32 @@ func parseInt(s string) (int, error) {
 
 	return result, nil
 }
+
+func TestScimError_WithScimType(t *testing.T) {
+	w := httptest.NewRecorder()
+	scimError(w, http.StatusBadRequest, "invalidValue", "userName is required")
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Equal(t, "application/scim+json", w.Header().Get("Content-Type"))
+
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+	assert.Equal(t, "invalidValue", body["scimType"])
+	assert.Equal(t, "userName is required", body["detail"])
+	assert.Equal(t, "400", body["status"])
+	assert.Contains(t, body["schemas"], "urn:ietf:params:scim:api:messages:2.0:Error")
+}
+
+func TestScimError_WithoutScimType(t *testing.T) {
+	w := httptest.NewRecorder()
+	scimError(w, http.StatusNotFound, "", "resource not found")
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+	assert.NotContains(t, body, "scimType")
+	assert.Equal(t, "resource not found", body["detail"])
+	assert.Equal(t, "404", body["status"])
+}
+

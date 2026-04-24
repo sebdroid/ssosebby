@@ -23,8 +23,7 @@ import {
   ArrowRightIcon,
   CopyIcon,
   GlobeIcon,
-  LoaderCircleIcon,
-  PlusIcon,
+  LoaderCircleIcon
 } from "lucide-react";
 import { offset, useFloating, useTransitionStyles } from "@floating-ui/react";
 import { Button } from "@/components/ui/button";

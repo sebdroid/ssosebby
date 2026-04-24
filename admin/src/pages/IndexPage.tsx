@@ -4,10 +4,8 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   CableIcon,
   CogIcon,
-  KeyIcon,
   Plus,
   PlusIcon,
-  UsersIcon,
 } from "lucide-react";
 import {
   useInfiniteQuery,
@@ -56,7 +54,8 @@ export function IndexPage() {
     { pageToken: "" },
     {
       pageParamKey: "pageToken",
-      getNextPageParam: (lastPage) => lastPage.nextPageToken || undefined,
+      getNextPageParam: (lastPage: { nextPageToken: string }) =>
+        lastPage.nextPageToken || undefined,
     },
   );
 
@@ -93,7 +92,8 @@ export function IndexPage() {
     { pageToken: "" },
     {
       pageParamKey: "pageToken",
-      getNextPageParam: (lastPage) => lastPage.nextPageToken || undefined,
+      getNextPageParam: (lastPage: { nextPageToken: string }) =>
+        lastPage.nextPageToken || undefined,
     },
   );
 

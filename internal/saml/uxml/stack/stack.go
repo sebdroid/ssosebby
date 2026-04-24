@@ -1,5 +1,7 @@
 package stack
 
+import "maps"
+
 // Stack is a stack of XML namespace declarations.
 type Stack []map[string]string
 
@@ -38,9 +40,7 @@ func (s *Stack) Len() int {
 func (s *Stack) GetAll() map[string]string {
 	out := map[string]string{}
 	for _, names := range *s {
-		for name, uri := range names {
-			out[name] = uri
-		}
+		maps.Copy(out, names)
 	}
 
 	return out

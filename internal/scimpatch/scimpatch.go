@@ -2,6 +2,7 @@ package scimpatch
 
 import (
 	"fmt"
+	"maps"
 	"strconv"
 	"strings"
 )
@@ -230,9 +231,7 @@ func applyOpToFiltered(op Operation, obj *map[string]any, segments []pathSegment
 					} else {
 						// Not the last segment, continue with the rest of the path
 						newMap := make(map[string]any)
-						for k, v := range m {
-							newMap[k] = v
-						}
+						maps.Copy(newMap, m)
 						arr[j] = newMap
 						if err := applyOp(Operation{
 							Op:    op.Op,
@@ -317,13 +316,12 @@ func splitPath(path string) []pathSegment {
 	if path == enterpriseUserPrefix {
 		return []pathSegment{{name: enterpriseUserPrefix}}
 	}
-	if strings.HasPrefix(path, enterpriseUserPrefix+":") {
-		remainingPath := strings.TrimPrefix(path, enterpriseUserPrefix+":")
-		return append([]pathSegment{{name: enterpriseUserPrefix}}, splitPath(remainingPath)...)
+	if after, ok := strings.CutPrefix(path, enterpriseUserPrefix+":"); ok {
+		return append([]pathSegment{{name: enterpriseUserPrefix}}, splitPath(after)...)
 	}
 
 	var segments []pathSegment
-	for _, part := range strings.Split(path, ".") {
+	for part := range strings.SplitSeq(path, ".") {
 		if idx := strings.Index(part, "["); idx != -1 {
 			if end := strings.Index(part, "]"); end != -1 {
 				filter := parseFilter(part[idx+1 : end])

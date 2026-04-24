@@ -6,8 +6,6 @@ import bash from "highlight.js/lib/languages/bash";
 import xml from "highlight.js/lib/languages/xml";
 import json from "highlight.js/lib/languages/json";
 
-import * as Sentry from "@sentry/react";
-
 hljs.registerLanguage("bash", bash);
 hljs.registerLanguage("xml", xml);
 hljs.registerLanguage("json", json);

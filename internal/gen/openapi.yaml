@@ -962,6 +962,15 @@ components:
 
                          Identity Providers are inconsistent about supporting sending custom attributes on groups. For this reason, it's
                          typical to not rely on them until a specific need arises.
+        SCIMGroupRef:
+            type: object
+            properties:
+                id:
+                    type: string
+                    description: The SCIM group ID.
+                displayName:
+                    type: string
+                    description: The group's display name.
         SCIMUser:
             type: object
             properties:
@@ -984,6 +993,11 @@ components:
 
                          Typically, these `attributes` are used to pass along the user's first/last name, or whether they should be
                          considered an admin within their company.
+                groups:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/SCIMGroupRef'
+                    description: SCIM groups this user belongs to. Only populated on get, not list.
         Status:
             type: object
             properties:

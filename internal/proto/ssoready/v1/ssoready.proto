@@ -410,6 +410,15 @@ message SCIMUser {
   // Typically, these `attributes` are used to pass along the user's first/last name, or whether they should be
   // considered an admin within their company.
   google.protobuf.Struct attributes = 5;
+  // SCIM groups this user belongs to. Only populated on get, not list.
+  repeated SCIMGroupRef groups = 6;
+}
+
+message SCIMGroupRef {
+  // The SCIM group ID.
+  string id = 1;
+  // The group's display name.
+  string display_name = 2;
 }
 
 message SCIMGroup {
@@ -1084,6 +1093,7 @@ message AppListSCIMUsersRequest {
   string scim_directory_id = 1;
   string page_token = 2;
   string scim_group_id = 3;
+  string filter = 4;
 }
 
 message AppListSCIMUsersResponse {

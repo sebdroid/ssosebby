@@ -3,7 +3,6 @@ import { useMatch, useNavigate, useParams } from "react-router";
 import { useInfiniteQuery, useQuery } from "@connectrpc/connect-query";
 import {
   appDeleteSAMLConnection,
-  appDeleteSCIMDirectory,
   appGetOrganization,
   appGetSAMLConnection,
   appListSAMLFlows,
@@ -19,7 +18,6 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowDownUpIcon, ChevronLeft } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
   Table,
@@ -29,16 +27,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import moment from "moment";
 import { z } from "zod";
 import {
-  Organization,
   SAMLConnection,
   SAMLFlowStatus,
 } from "@/gen/ssoready/v1/ssoready_pb";
@@ -55,7 +46,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -76,7 +66,6 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { Label } from "@/components/ui/label";
-import { InputTags } from "@/components/InputTags";
 import { Switch } from "@/components/ui/switch";
 import { DocsLink } from "@/components/DocsLink";
 import { Title } from "@/components/Title";
@@ -373,6 +362,7 @@ function EditSAMLConnectionAlertDialog({
 
 function ListLoginFlowsTabContent() {
   const { environmentId, organizationId, samlConnectionId } = useParams();
+  if (!environmentId || !organizationId || !samlConnectionId) return null;
   const {
     data: listFlowsResponses,
     fetchNextPage,
@@ -382,7 +372,8 @@ function ListLoginFlowsTabContent() {
     { samlConnectionId, pageToken: "" },
     {
       pageParamKey: "pageToken",
-      getNextPageParam: (lastPage) => lastPage.nextPageToken || undefined,
+      getNextPageParam: (lastPage: { nextPageToken: string }) =>
+        lastPage.nextPageToken || undefined,
     },
   );
 

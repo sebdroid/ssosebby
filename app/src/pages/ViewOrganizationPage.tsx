@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import {
   createConnectQueryKey,
@@ -11,7 +11,6 @@ import {
   appCreateSAMLConnection,
   appCreateSCIMDirectory,
   appDeleteOrganization,
-  appDeleteSCIMDirectory,
   appGetOrganization,
   appListSAMLConnections,
   appListSCIMDirectories,
@@ -35,13 +34,10 @@ import {
 } from "@/components/ui/table";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Plus, PlusCircle } from "lucide-react";
+import { Plus } from "lucide-react";
 import { z } from "zod";
 import {
-  Environment,
-  Organization,
-  SAMLConnection,
-  SCIMDirectory,
+  Organization
 } from "@/gen/ssoready/v1/ssoready_pb";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -73,10 +69,8 @@ import { toast } from "sonner";
 import {
   Breadcrumb,
   BreadcrumbItem,
-  BreadcrumbLink,
   BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
+  BreadcrumbPage
 } from "@/components/ui/breadcrumb";
 import { DocsLink } from "@/components/DocsLink";
 import { Switch } from "@/components/ui/switch";
@@ -86,6 +80,7 @@ import { InfoTooltip } from "@/components/InfoTooltip";
 
 export function ViewOrganizationPage() {
   const { environmentId, organizationId } = useParams();
+  if (!environmentId || !organizationId) return null;
   const { data: organization } = useQuery(appGetOrganization, {
     id: organizationId,
   });
@@ -98,7 +93,8 @@ export function ViewOrganizationPage() {
     { organizationId, pageToken: "" },
     {
       pageParamKey: "pageToken",
-      getNextPageParam: (lastPage) => lastPage.nextPageToken || undefined,
+      getNextPageParam: (lastPage: { nextPageToken: string }) =>
+        lastPage.nextPageToken || undefined,
     },
   );
 
@@ -576,6 +572,7 @@ function EditOrganizationAlertDialog({
 
 function OrganizationSCIMDirectoriesPage() {
   const { environmentId, organizationId } = useParams();
+  if (!environmentId || !organizationId) return null;
   const { data: organization } = useQuery(appGetOrganization, {
     id: organizationId,
   });
@@ -588,7 +585,8 @@ function OrganizationSCIMDirectoriesPage() {
     { organizationId, pageToken: "" },
     {
       pageParamKey: "pageToken",
-      getNextPageParam: (lastPage) => lastPage.nextPageToken || undefined,
+      getNextPageParam: (lastPage: { nextPageToken: string }) =>
+        lastPage.nextPageToken || undefined,
     },
   );
 

@@ -43,7 +43,7 @@ type logger struct {
 	verbose bool
 }
 
-func (l logger) Printf(format string, v ...interface{}) {
+func (l logger) Printf(format string, v ...any) {
 	log.Printf(format, v...)
 }
 

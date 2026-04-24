@@ -22,5 +22,16 @@ func (s *Service) AppGetSCIMUser(ctx context.Context, req *connect.Request[ssore
 		return nil, err
 	}
 
+	groups, err := s.Store.AppGetSCIMGroupsForUser(ctx, res.Id)
+	if err != nil {
+		return nil, err
+	}
+	for _, g := range groups {
+		res.Groups = append(res.Groups, &ssoreadyv1.SCIMGroupRef{
+			Id:          g.Id,
+			DisplayName: g.DisplayName,
+		})
+	}
+
 	return connect.NewResponse(res), nil
 }

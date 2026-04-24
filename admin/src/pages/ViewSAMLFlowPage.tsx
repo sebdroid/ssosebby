@@ -1,5 +1,5 @@
 import { useParams } from "react-router";
-import { disableQuery, useQuery } from "@connectrpc/connect-query";
+import { useQuery } from "@connectrpc/connect-query";
 import {
   adminGetSAMLConnection,
   adminGetSAMLFlow,

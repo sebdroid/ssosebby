@@ -1,20 +1,10 @@
-import React, { useCallback, useId, useState } from "react";
-import { useMatch, useParams } from "react-router";
+import React, { useCallback, useState } from "react";
+import { useParams } from "react-router";
 import { useInfiniteQuery, useQuery } from "@connectrpc/connect-query";
 import {
   adminGetSAMLConnection,
   adminListSAMLFlows,
-  adminParseSAMLMetadata,
   adminUpdateSAMLConnection,
-  getEnvironment,
-  getOrganization,
-  getSAMLConnection,
-  listOrganizations,
-  listSAMLConnections,
-  listSAMLFlows,
-  parseSAMLMetadata,
-  updateOrganization,
-  updateSAMLConnection,
 } from "@/gen/ssoready/v1/ssoready-SSOReadyService_connectquery";
 import {
   Card,
@@ -25,7 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, CogIcon } from "lucide-react";
+import { CogIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
   Table,
@@ -35,16 +25,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-// import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-// import {
-//   Collapsible,
-//   CollapsibleContent,
-//   CollapsibleTrigger,
-// } from "@/components/ui/collapsible";
 import moment from "moment";
 import { z } from "zod";
 import {
-  Organization,
   SAMLConnection,
   SAMLFlowStatus,
 } from "@/gen/ssoready/v1/ssoready_pb";
@@ -60,8 +43,6 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -72,15 +53,6 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { LayoutMain } from "@/components/Layout";
 import {
@@ -93,6 +65,8 @@ import { useTitle } from "@/useTitle";
 
 export function ViewSAMLConnectionPage() {
   const { samlConnectionId } = useParams();
+  if (!samlConnectionId) return null;
+
   const { data: samlConnection } = useQuery(adminGetSAMLConnection, {
     id: samlConnectionId,
   });
@@ -106,7 +80,8 @@ export function ViewSAMLConnectionPage() {
     { samlConnectionId, pageToken: "" },
     {
       pageParamKey: "pageToken",
-      getNextPageParam: (lastPage) => lastPage.nextPageToken || undefined,
+      getNextPageParam: (lastPage: { nextPageToken: string }) =>
+        lastPage.nextPageToken || undefined,
     },
   );
 
@@ -388,179 +363,3 @@ function EditSAMLConnectionAlertDialog({
   );
 }
 
-const IDPSettingsFormSchema = z.object({
-  idpEntityId: z.string().min(1, {
-    message: "IDP Entity ID must be non-empty.",
-  }),
-  idpRedirectUrl: z.string().url({
-    message: "IDP Redirect URL must be a valid URL.",
-  }),
-  idpCertificate: z.string().startsWith("-----BEGIN CERTIFICATE-----", {
-    message: "IDP Certificate must be a PEM-encoded X.509 certificate.",
-  }),
-});
-
-function EditSAMLConnectionIDPSettingsAlertDialog({
-  samlConnection,
-}: {
-  samlConnection: SAMLConnection;
-}) {
-  const form = useForm<z.infer<typeof IDPSettingsFormSchema>>({
-    resolver: zodResolver(IDPSettingsFormSchema),
-    defaultValues: {
-      idpEntityId: samlConnection.idpEntityId,
-      idpRedirectUrl: samlConnection.idpRedirectUrl,
-      idpCertificate: samlConnection.idpCertificate,
-    },
-  });
-
-  const [open, setOpen] = useState(false);
-  const updateSAMLConnectionMutation = useMutation(adminUpdateSAMLConnection);
-  const queryClient = useQueryClient();
-
-  const handleSubmit = useCallback(
-    async (data: z.infer<typeof IDPSettingsFormSchema>, e: any) => {
-      e.preventDefault();
-      await updateSAMLConnectionMutation.mutateAsync({
-        samlConnection: {
-          id: samlConnection.id,
-          primary: samlConnection.primary,
-          idpEntityId: data.idpEntityId,
-          idpRedirectUrl: data.idpRedirectUrl,
-          idpCertificate: data.idpCertificate,
-        },
-      });
-
-      await queryClient.invalidateQueries({
-        queryKey: createConnectQueryKey(adminGetSAMLConnection, {
-          id: samlConnection.id,
-        }),
-      });
-
-      setOpen(false);
-    },
-    [samlConnection.id, updateSAMLConnectionMutation, queryClient, setOpen],
-  );
-
-  const id = useId();
-  const [metadataUrl, setMetadataUrl] = useState("");
-  const parseSAMLMetadataMutation = useMutation(adminParseSAMLMetadata);
-  const handleLoadMetadata = useCallback(async () => {
-    const { idpRedirectUrl, idpCertificate, idpEntityId } =
-      await parseSAMLMetadataMutation.mutateAsync({ url: metadataUrl });
-
-    form.setValue("idpRedirectUrl", idpRedirectUrl);
-    form.setValue("idpCertificate", idpCertificate);
-    form.setValue("idpEntityId", idpEntityId);
-  }, [parseSAMLMetadataMutation, metadataUrl, form]);
-
-  return (
-    <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogTrigger asChild>
-        <Button variant="outline">Edit</Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <Form {...form}>
-          <form
-            onSubmit={form.handleSubmit(handleSubmit)}
-            className="w-full space-y-6"
-          >
-            <AlertDialogHeader>
-              <AlertDialogTitle>
-                Edit identity provider configuration
-              </AlertDialogTitle>
-            </AlertDialogHeader>
-
-            <FormItem>
-              <Label htmlFor={id}>IDP Metadata URL</Label>
-              <div className="flex w-full items-center space-x-2">
-                <Input
-                  id={id}
-                  placeholder="https://identity-provider.com/app/123/metadata.xml"
-                  value={metadataUrl}
-                  onChange={(e) => setMetadataUrl(e.target.value)}
-                />
-                <Button type="button" onClick={handleLoadMetadata}>
-                  Load from metadata
-                </Button>
-              </div>
-              <FormDescription>IDP Metadata URL.</FormDescription>
-            </FormItem>
-
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">
-                  Or manually enter
-                </span>
-              </div>
-            </div>
-
-            <FormField
-              control={form.control}
-              name="idpEntityId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>IDP Entity ID</FormLabel>
-                  <FormControl>
-                    <Input {...field} />
-                  </FormControl>
-                  <FormDescription>IDP Entity ID.</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="idpRedirectUrl"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>IDP Redirect URL</FormLabel>
-                  <FormControl>
-                    <Input {...field} />
-                  </FormControl>
-                  <FormDescription>IDP Redirect URL.</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="idpCertificate"
-              render={({ field: { onChange } }) => (
-                <FormItem>
-                  <FormLabel>IDP Certificate</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="file"
-                      onChange={async (e) => {
-                        // File inputs are special; they are necessarily "uncontrolled", and their value is a FileList.
-                        // We just copy over the file's contents to the react-form-hook state manually on input change.
-                        if (e.target.files) {
-                          onChange(await e.target.files[0].text());
-                        }
-                      }}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    IDP Certificate, as a PEM-encoded X.509 certificate. These
-                    start with '-----BEGIN CERTIFICATE-----' and end with
-                    '-----END CERTIFICATE-----'.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <Button type="submit">Save</Button>
-            </AlertDialogFooter>
-          </form>
-        </Form>
-      </AlertDialogContent>
-    </AlertDialog>
-  );
-}
