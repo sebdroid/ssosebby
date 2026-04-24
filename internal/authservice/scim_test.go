@@ -340,16 +340,6 @@ func mustNewStruct(m map[string]any) *structpb.Struct {
 	return s
 }
 
-//go:fix inline
-func strPtr(s string) *string {
-	return new(s)
-}
-
-//go:fix inline
-func boolPtr(b bool) *bool {
-	return new(b)
-}
-
 // MockSCIMStore implements the store methods needed for SCIM handler tests
 type MockSCIMStore struct {
 	GetSCIMUserIncludeDeletedFunc func(ctx context.Context, req *store.AuthGetSCIMUserIncludeDeletedRequest) (*ssoreadyv1.SCIMUser, error)
@@ -1281,7 +1271,7 @@ func TestScimError_WithScimType(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
 	assert.Equal(t, "invalidValue", body["scimType"])
 	assert.Equal(t, "userName is required", body["detail"])
-	assert.Equal(t, float64(400), body["status"])
+	assert.Equal(t, "400", body["status"])
 	assert.Contains(t, body["schemas"], "urn:ietf:params:scim:api:messages:2.0:Error")
 }
 
@@ -1295,7 +1285,7 @@ func TestScimError_WithoutScimType(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
 	assert.NotContains(t, body, "scimType")
 	assert.Equal(t, "resource not found", body["detail"])
-	assert.Equal(t, float64(404), body["status"])
+	assert.Equal(t, "404", body["status"])
 }
 
 func TestScimCreateUser_MissingUserName(t *testing.T) {

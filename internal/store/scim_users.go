@@ -68,7 +68,7 @@ func (s *Store) AppListSCIMUsers(ctx context.Context, req *ssoreadyv1.AppListSCI
 			}
 		}
 
-		return s.appListSCIMUsersResponse(qSCIMUsers, 10)
+		return s.appListSCIMUsersResponse(qSCIMUsers, limit)
 	}
 
 	// Dynamic query path: filter is set
@@ -153,7 +153,10 @@ func (s *Store) AppGetSCIMGroupsForUser(ctx context.Context, scimUserID string) 
 		return nil, fmt.Errorf("parse scim user id: %w", err)
 	}
 
-	qGroups, err := s.q.AuthListSCIMGroupsForUser(ctx, userID)
+	qGroups, err := s.q.AppListSCIMGroupsForUser(ctx, queries.AppListSCIMGroupsForUserParams{
+		ScimUserID:        userID,
+		AppOrganizationID: authn.AppOrgID(ctx),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("list groups for user: %w", err)
 	}

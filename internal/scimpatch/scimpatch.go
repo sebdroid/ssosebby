@@ -317,8 +317,7 @@ func splitPath(path string) []pathSegment {
 		return []pathSegment{{name: enterpriseUserPrefix}}
 	}
 	if after, ok := strings.CutPrefix(path, enterpriseUserPrefix+":"); ok {
-		remainingPath := after
-		return append([]pathSegment{{name: enterpriseUserPrefix}}, splitPath(remainingPath)...)
+		return append([]pathSegment{{name: enterpriseUserPrefix}}, splitPath(after)...)
 	}
 
 	var segments []pathSegment

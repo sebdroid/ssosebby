@@ -179,15 +179,7 @@ func (s *Service) scimCreateUser(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	if !domainOk {
-		msg, err := json.Marshal(map[string]any{
-			"status": http.StatusBadRequest,
-			"detail": fmt.Sprintf("userName is not from the list of allowed domains: %s", strings.Join(allowedDomains, ", ")),
-		})
-		if err != nil {
-			panic(err)
-		}
-
-		http.Error(w, string(msg), http.StatusBadRequest)
+		scimError(w, http.StatusBadRequest, "", fmt.Sprintf("userName is not from the list of allowed domains: %s", strings.Join(allowedDomains, ", ")))
 		return &emailOutsideOrgDomainsError{BadEmail: userName}
 	}
 
@@ -214,7 +206,6 @@ func (s *Service) scimCreateUser(w http.ResponseWriter, r *http.Request) error {
 	response := scimUserToResource(scimUser.SCIMUser)
 	response["schemas"] = []string{"urn:ietf:params:scim:schemas:core:2.0:User"}
 
-	w.Header().Set("Content-Type", "application/scim+json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		panic(err)
 	}
@@ -270,15 +261,7 @@ func (s *Service) scimUpdateUser(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	if !domainOk {
-		msg, err := json.Marshal(map[string]any{
-			"status": http.StatusBadRequest,
-			"detail": fmt.Sprintf("userName is not from the list of allowed domains: %s", strings.Join(allowedDomains, ", ")),
-		})
-		if err != nil {
-			panic(err)
-		}
-
-		http.Error(w, string(msg), http.StatusBadRequest)
+		scimError(w, http.StatusBadRequest, "", fmt.Sprintf("userName is not from the list of allowed domains: %s", strings.Join(allowedDomains, ", ")))
 		return &emailOutsideOrgDomainsError{BadEmail: userName}
 	}
 
@@ -305,7 +288,6 @@ func (s *Service) scimUpdateUser(w http.ResponseWriter, r *http.Request) error {
 	response := scimUserToResource(scimUser.SCIMUser)
 	response["schemas"] = []string{"urn:ietf:params:scim:schemas:core:2.0:User"}
 
-	w.Header().Set("Content-Type", "application/scim+json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		return fmt.Errorf("encode: %w", err)
 	}
@@ -386,15 +368,7 @@ func (s *Service) scimPatchUser(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	if !domainOk {
-		msg, err := json.Marshal(map[string]any{
-			"status": http.StatusBadRequest,
-			"detail": fmt.Sprintf("userName is not from the list of allowed domains: %s", strings.Join(allowedDomains, ", ")),
-		})
-		if err != nil {
-			panic(err)
-		}
-
-		http.Error(w, string(msg), http.StatusBadRequest)
+		scimError(w, http.StatusBadRequest, "", fmt.Sprintf("userName is not from the list of allowed domains: %s", strings.Join(allowedDomains, ", ")))
 		return &emailOutsideOrgDomainsError{BadEmail: patchedSCIMUser.Email}
 	}
 
@@ -418,8 +392,7 @@ func (s *Service) scimDeleteUser(w http.ResponseWriter, r *http.Request) error {
 		SCIMDirectoryID: scimDirectoryID,
 		SCIMUserID:      scimUserID,
 	}); err != nil {
-		// Return 404 for invalid ID format or non-existent user
-		if strings.Contains(err.Error(), "parse scim user id") || strings.Contains(err.Error(), "get scim user") {
+		if errors.Is(err, store.ErrBadSCIMUserID) || errors.Is(err, store.ErrSCIMUserNotFound) {
 			scimError(w, http.StatusNotFound, "", "user not found")
 			return nil
 		}
@@ -627,7 +600,6 @@ func (s *Service) scimCreateGroup(w http.ResponseWriter, r *http.Request) error 
 	}
 	response["members"] = responseMembers
 
-	w.Header().Set("Content-Type", "application/scim+json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		panic(err)
 	}
@@ -651,8 +623,7 @@ func (s *Service) scimDeleteGroup(w http.ResponseWriter, r *http.Request) error 
 		SCIMDirectoryID: scimDirectoryID,
 		SCIMGroupID:     scimGroupID,
 	}); err != nil {
-		// Return 404 for invalid ID format or non-existent group
-		if strings.Contains(err.Error(), "parse scim group id") || strings.Contains(err.Error(), "get scim group") {
+		if errors.Is(err, store.ErrBadSCIMGroupID) || errors.Is(err, store.ErrSCIMGroupNotFound) {
 			scimError(w, http.StatusNotFound, "", "group not found")
 			return nil
 		}
@@ -778,8 +749,16 @@ func (s *Service) scimPatchGroup(w http.ResponseWriter, r *http.Request) error {
 
 	// jumpcloud changes group display names via a top-level replace
 	if len(patch.Operations) == 1 && patch.Operations[0].Op == "replace" && patch.Operations[0].Path == "" {
-		value := patch.Operations[0].Value.(map[string]any)
-		displayName := value["displayName"].(string)
+		value, ok := patch.Operations[0].Value.(map[string]any)
+		if !ok {
+			scimError(w, http.StatusBadRequest, "invalidValue", "replace value must be an object")
+			return nil
+		}
+		displayName, ok := value["displayName"].(string)
+		if !ok || displayName == "" {
+			scimError(w, http.StatusBadRequest, "invalidValue", "displayName is required and must be a string")
+			return nil
+		}
 
 		if err := s.Store.AuthUpdateSCIMGroupDisplayName(ctx, &ssoreadyv1.SCIMGroup{
 			Id:              scimGroupID,
@@ -795,18 +774,36 @@ func (s *Service) scimPatchGroup(w http.ResponseWriter, r *http.Request) error {
 
 	// jumpcloud adds members to groups via an `add` on members; entra uses an `Add`
 	if len(patch.Operations) == 1 && (patch.Operations[0].Op == "add" || patch.Operations[0].Op == "Add") && patch.Operations[0].Path == "members" {
-		value := patch.Operations[0].Value.([]any)
-		scimUserID := value[0].(map[string]any)["value"].(string)
+		value, ok := patch.Operations[0].Value.([]any)
+		if !ok || len(value) == 0 {
+			scimError(w, http.StatusBadRequest, "invalidValue", "members value must be a non-empty array")
+			return nil
+		}
+
+		var scimUserIDs []string
+		for _, entry := range value {
+			member, ok := entry.(map[string]any)
+			if !ok {
+				scimError(w, http.StatusBadRequest, "invalidValue", "member entry must be an object")
+				return nil
+			}
+			scimUserID, ok := member["value"].(string)
+			if !ok || scimUserID == "" {
+				scimError(w, http.StatusBadRequest, "invalidValue", "member value must be a non-empty string")
+				return nil
+			}
+			scimUserIDs = append(scimUserIDs, scimUserID)
+		}
 
 		if err := s.Store.AuthAddSCIMGroupMember(ctx, &store.AuthAddSCIMGroupMemberRequest{
 			SCIMGroup: &ssoreadyv1.SCIMGroup{
 				Id:              scimGroupID,
 				ScimDirectoryId: scimDirectoryID,
 			},
-			SCIMUserID: scimUserID,
+			SCIMUserIDs: scimUserIDs,
 		}); err != nil {
 			if errors.Is(err, store.ErrBadSCIMUserID) {
-				http.Error(w, "bad scim user id", http.StatusBadRequest)
+				scimError(w, http.StatusBadRequest, "invalidValue", "bad scim user id")
 				return nil
 			}
 
@@ -819,16 +816,39 @@ func (s *Service) scimPatchGroup(w http.ResponseWriter, r *http.Request) error {
 
 	// entra removes members via a `remove` on members with a value
 	if len(patch.Operations) == 1 && (patch.Operations[0].Op == "remove" || patch.Operations[0].Op == "Remove") && patch.Operations[0].Path == "members" {
-		value := patch.Operations[0].Value.([]any)
-		scimUserID := value[0].(map[string]any)["value"].(string)
+		value, ok := patch.Operations[0].Value.([]any)
+		if !ok || len(value) == 0 {
+			scimError(w, http.StatusBadRequest, "invalidValue", "members value must be a non-empty array")
+			return nil
+		}
+
+		var scimUserIDs []string
+		for _, entry := range value {
+			member, ok := entry.(map[string]any)
+			if !ok {
+				scimError(w, http.StatusBadRequest, "invalidValue", "member entry must be an object")
+				return nil
+			}
+			scimUserID, ok := member["value"].(string)
+			if !ok || scimUserID == "" {
+				scimError(w, http.StatusBadRequest, "invalidValue", "member value must be a non-empty string")
+				return nil
+			}
+			scimUserIDs = append(scimUserIDs, scimUserID)
+		}
 
 		if err := s.Store.AuthRemoveSCIMGroupMember(ctx, &store.AuthRemoveSCIMGroupMemberRequest{
 			SCIMGroup: &ssoreadyv1.SCIMGroup{
 				Id:              scimGroupID,
 				ScimDirectoryId: scimDirectoryID,
 			},
-			SCIMUserID: scimUserID,
+			SCIMUserIDs: scimUserIDs,
 		}); err != nil {
+			if errors.Is(err, store.ErrBadSCIMUserID) {
+				scimError(w, http.StatusBadRequest, "invalidValue", "bad scim user id")
+				return nil
+			}
+
 			panic(fmt.Errorf("store: %w", err))
 		}
 
@@ -850,14 +870,16 @@ func scimError(w http.ResponseWriter, status int, scimType, detail string) {
 	resp := map[string]any{
 		"schemas": []string{"urn:ietf:params:scim:api:messages:2.0:Error"},
 		"detail":  detail,
-		"status":  status,
+		"status":  strconv.Itoa(status),
 	}
 	if scimType != "" {
 		resp["scimType"] = scimType
 	}
 	w.Header().Set("Content-Type", "application/scim+json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(resp)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		panic(fmt.Errorf("scim error response encode: %w", err))
+	}
 }
 
 // scimUserToResource converts our representation of a scim user to its SCIM HTTP representation
