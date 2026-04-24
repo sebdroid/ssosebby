@@ -260,7 +260,7 @@ func (s *Store) AuthGetSCIMUser(ctx context.Context, req *AuthGetSCIMUserRequest
 
 	scimUserID, err := idformat.SCIMUser.Parse(req.SCIMUserID)
 	if err != nil {
-		return nil, fmt.Errorf("parse scim user id: %w", err)
+		return nil, fmt.Errorf("parse scim user id: %w: %w", ErrBadSCIMUserID, err)
 	}
 
 	qSCIMUser, err := s.q.AuthGetSCIMUser(ctx, queries.AuthGetSCIMUserParams{
@@ -607,7 +607,7 @@ func (s *Store) AuthGetSCIMGroup(ctx context.Context, req *AuthGetSCIMGroupReque
 
 	scimGroupID, err := idformat.SCIMGroup.Parse(req.SCIMGroupID)
 	if err != nil {
-		return nil, fmt.Errorf("parse scim group id: %w", err)
+		return nil, fmt.Errorf("parse scim group id: %w: %w", ErrBadSCIMGroupID, err)
 	}
 
 	qSCIMGroup, err := s.q.AuthGetSCIMGroup(ctx, queries.AuthGetSCIMGroupParams{

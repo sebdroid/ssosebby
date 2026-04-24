@@ -123,8 +123,7 @@ func (s *Service) scimGetUser(w http.ResponseWriter, r *http.Request) error {
 		SCIMUserID:      scimUserID,
 	})
 	if err != nil {
-		// Return 404 for not found or invalid ID format (SCIM clients may probe with arbitrary IDs)
-		if errors.Is(err, store.ErrSCIMUserNotFound) || strings.Contains(err.Error(), "parse scim user id") {
+		if errors.Is(err, store.ErrSCIMUserNotFound) || errors.Is(err, store.ErrBadSCIMUserID) {
 			scimError(w, http.StatusNotFound, "", "user not found")
 			return nil
 		}
@@ -274,8 +273,7 @@ func (s *Service) scimUpdateUser(w http.ResponseWriter, r *http.Request) error {
 		},
 	})
 	if err != nil {
-		// Return 404 for not found or invalid ID format
-		if errors.Is(err, store.ErrSCIMUserNotFound) || strings.Contains(err.Error(), "parse scim user id") {
+		if errors.Is(err, store.ErrSCIMUserNotFound) || errors.Is(err, store.ErrBadSCIMUserID) {
 			scimError(w, http.StatusNotFound, "", "user not found")
 			return nil
 		}
@@ -313,8 +311,7 @@ func (s *Service) scimPatchUser(w http.ResponseWriter, r *http.Request) error {
 		SCIMUserID:      scimUserID,
 	})
 	if err != nil {
-		// Return 404 for not found or invalid ID format
-		if errors.Is(err, store.ErrSCIMUserNotFound) || strings.Contains(err.Error(), "parse scim user id") {
+		if errors.Is(err, store.ErrSCIMUserNotFound) || errors.Is(err, store.ErrBadSCIMUserID) {
 			scimError(w, http.StatusNotFound, "", "user not found")
 			return nil
 		}
@@ -500,8 +497,7 @@ func (s *Service) scimGetGroup(w http.ResponseWriter, r *http.Request) error {
 		SCIMGroupID:     scimGroupID,
 	})
 	if err != nil {
-		// Return 404 for not found or invalid ID format
-		if errors.Is(err, store.ErrSCIMGroupNotFound) || strings.Contains(err.Error(), "parse scim group id") {
+		if errors.Is(err, store.ErrSCIMGroupNotFound) || errors.Is(err, store.ErrBadSCIMGroupID) {
 			scimError(w, http.StatusNotFound, "", "group not found")
 			return nil
 		}
