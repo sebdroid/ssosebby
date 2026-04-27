@@ -556,6 +556,8 @@ message ListSCIMUsersRequest {
   string scim_group_id = 4;
   // Pagination token. Leave empty to get the first page of results.
   string page_token = 5;
+  // SCIM filter expression (e.g. `userName eq "alice@example.com"`). If specified, only matching users are returned.
+  string filter = 6;
 }
 
 message ListSCIMUsersResponse {

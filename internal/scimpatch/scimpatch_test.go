@@ -86,7 +86,7 @@ func TestPatch(t *testing.T) {
 			name: "add to sub-object with existing prop",
 			in:   map[string]any{"foo": map[string]any{"bar": map[string]any{"baz": "xxx"}}},
 			ops:  []scimpatch.Operation{{Op: "add", Path: "foo.notbar.baz", Value: map[string]any{"baz": "yyy"}}},
-			out:  map[string]any{"foo": map[string]any{
+			out: map[string]any{"foo": map[string]any{
 				"bar":    map[string]any{"baz": "xxx"},
 				"notbar": map[string]any{"baz": map[string]any{"baz": "yyy"}},
 			}},
@@ -95,7 +95,7 @@ func TestPatch(t *testing.T) {
 			name: "add to top-level-object with existing prop",
 			in:   map[string]any{"foo": map[string]any{"bar": map[string]any{"baz": "xxx"}}},
 			ops:  []scimpatch.Operation{{Op: "add", Path: "bar.baz", Value: "yyy"}},
-			out:  map[string]any{
+			out: map[string]any{
 				"foo": map[string]any{"bar": map[string]any{"baz": "xxx"}},
 				"bar": map[string]any{"baz": "yyy"},
 			},

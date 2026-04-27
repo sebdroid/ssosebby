@@ -537,6 +537,11 @@ paths:
                   description: Pagination token. Leave empty to get the first page of results.
                   schema:
                     type: string
+                - name: filter
+                  in: query
+                  description: SCIM filter expression (e.g. `userName eq "alice@example.com"`). If specified, only matching users are returned.
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK

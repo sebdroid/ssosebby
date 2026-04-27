@@ -3139,6 +3139,49 @@ func (q *Queries) ListSCIMGroupsBySCIMUserID(ctx context.Context, arg ListSCIMGr
 	return items, nil
 }
 
+const listSCIMGroupsForUser = `-- name: ListSCIMGroupsForUser :many
+select scim_groups.id, scim_groups.scim_directory_id, scim_groups.display_name, scim_groups.deleted, scim_groups.attributes
+from scim_groups
+         join scim_user_group_memberships on scim_user_group_memberships.scim_group_id = scim_groups.id
+         join scim_directories on scim_groups.scim_directory_id = scim_directories.id
+         join organizations on scim_directories.organization_id = organizations.id
+where scim_user_group_memberships.scim_user_id = $1
+  and organizations.environment_id = $2
+  and scim_groups.deleted = false
+order by scim_groups.id
+`
+
+type ListSCIMGroupsForUserParams struct {
+	ScimUserID    uuid.UUID
+	EnvironmentID uuid.UUID
+}
+
+func (q *Queries) ListSCIMGroupsForUser(ctx context.Context, arg ListSCIMGroupsForUserParams) ([]ScimGroup, error) {
+	rows, err := q.db.Query(ctx, listSCIMGroupsForUser, arg.ScimUserID, arg.EnvironmentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ScimGroup
+	for rows.Next() {
+		var i ScimGroup
+		if err := rows.Scan(
+			&i.ID,
+			&i.ScimDirectoryID,
+			&i.DisplayName,
+			&i.Deleted,
+			&i.Attributes,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSCIMUsers = `-- name: ListSCIMUsers :many
 select id, scim_directory_id, email, deleted, attributes
 from scim_users
