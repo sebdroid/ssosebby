@@ -853,6 +853,17 @@ where scim_user_group_memberships.scim_user_id = $1
   and scim_groups.deleted = false
 order by scim_groups.id;
 
+-- name: ListSCIMGroupsForUser :many
+select scim_groups.*
+from scim_groups
+         join scim_user_group_memberships on scim_user_group_memberships.scim_group_id = scim_groups.id
+         join scim_directories on scim_groups.scim_directory_id = scim_directories.id
+         join organizations on scim_directories.organization_id = organizations.id
+where scim_user_group_memberships.scim_user_id = $1
+  and organizations.environment_id = $2
+  and scim_groups.deleted = false
+order by scim_groups.id;
+
 -- name: GetSCIMGroup :one
 select scim_groups.*
 from scim_groups

@@ -82,8 +82,8 @@ func (s *Store) AppListSCIMUsers(ctx context.Context, req *ssoreadyv1.AppListSCI
 
 	builder := psql.Select("id", "scim_directory_id", "email", "deleted", "attributes").
 		From("scim_users").
-		Where(sq.Eq{"scim_directory_id": scimDirID}).
-		Where(sq.GtOrEq{"id": startID}).
+		Where("scim_directory_id = ?", scimDirID).
+		Where("id >= ?", startID).
 		OrderBy("id").
 		Limit(uint64(limit + 1))
 

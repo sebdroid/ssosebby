@@ -1287,4 +1287,3 @@ func TestScimError_WithoutScimType(t *testing.T) {
 	assert.Equal(t, "resource not found", body["detail"])
 	assert.Equal(t, "404", body["status"])
 }
-

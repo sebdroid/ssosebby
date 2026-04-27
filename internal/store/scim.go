@@ -6,16 +6,18 @@ import (
 	"fmt"
 
 	"connectrpc.com/connect"
+	sq "github.com/Masterminds/squirrel"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/sebdroid/ssosebby/internal/authn"
 	ssoreadyv1 "github.com/sebdroid/ssosebby/internal/gen/ssoready/v1"
+	"github.com/sebdroid/ssosebby/internal/scimfilter"
 	"github.com/sebdroid/ssosebby/internal/store/idformat"
 	"github.com/sebdroid/ssosebby/internal/store/queries"
 )
 
 func (s *Store) ListSCIMUsers(ctx context.Context, req *ssoreadyv1.ListSCIMUsersRequest) (*ssoreadyv1.ListSCIMUsersResponse, error) {
-	_, q, commit, rollback, err := s.tx(ctx)
+	tx, q, commit, rollback, err := s.tx(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -79,39 +81,101 @@ func (s *Store) ListSCIMUsers(ctx context.Context, req *ssoreadyv1.ListSCIMUsers
 	}
 
 	limit := 10
-	var qSCIMUsers []queries.ScimUser
+
+	if req.Filter == "" {
+		var qSCIMUsers []queries.ScimUser
+		if req.ScimGroupId != "" {
+			scimGroupID, err := idformat.SCIMGroup.Parse(req.ScimGroupId)
+			if err != nil {
+				return nil, fmt.Errorf("parse scim group id: %w", err)
+			}
+
+			qSCIMUsers, err = s.q.ListSCIMUsersInSCIMGroup(ctx, queries.ListSCIMUsersInSCIMGroupParams{
+				ScimDirectoryID: scimDirID,
+				ID:              startID,
+				Limit:           int32(limit + 1),
+				ScimGroupID:     scimGroupID,
+			})
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			qSCIMUsers, err = s.q.ListSCIMUsers(ctx, queries.ListSCIMUsersParams{
+				ScimDirectoryID: scimDirID,
+				ID:              startID,
+				Limit:           int32(limit + 1),
+			})
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		if err := commit(); err != nil {
+			return nil, fmt.Errorf("commit: %w", err)
+		}
+
+		return s.listSCIMUsersResponse(qSCIMUsers, limit)
+	}
+
+	parsedFilter, err := scimfilter.ParseToSquirrel(req.Filter, scimfilter.ResourceTypeUser)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("%w: %v", ErrInvalidSCIMFilter, err))
+	}
+
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	builder := psql.Select("id", "scim_directory_id", "email", "deleted", "attributes").
+		From("scim_users").
+		Where("scim_directory_id = ?", scimDirID).
+		Where("id >= ?", startID).
+		OrderBy("id").
+		Limit(uint64(limit + 1))
+
+	if parsedFilter.Where != nil {
+		builder = builder.Where(parsedFilter.Where)
+	}
+
 	if req.ScimGroupId != "" {
-		// list by group id
 		scimGroupID, err := idformat.SCIMGroup.Parse(req.ScimGroupId)
 		if err != nil {
 			return nil, fmt.Errorf("parse scim group id: %w", err)
 		}
+		builder = builder.Where(
+			"EXISTS (SELECT 1 FROM scim_user_group_memberships WHERE scim_group_id = ? AND scim_user_id = scim_users.id)",
+			scimGroupID,
+		)
+	}
 
-		qSCIMUsers, err = s.q.ListSCIMUsersInSCIMGroup(ctx, queries.ListSCIMUsersInSCIMGroupParams{
-			ScimDirectoryID: scimDirID,
-			ID:              startID,
-			Limit:           int32(limit + 1),
-			ScimGroupID:     scimGroupID,
-		})
-		if err != nil {
-			return nil, err
+	query, args, err := builder.ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("build query: %w", err)
+	}
+
+	rows, err := tx.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list filtered scim users: %w", err)
+	}
+	defer rows.Close()
+
+	var qSCIMUsers []queries.ScimUser
+	for rows.Next() {
+		var u queries.ScimUser
+		if err := rows.Scan(&u.ID, &u.ScimDirectoryID, &u.Email, &u.Deleted, &u.Attributes); err != nil {
+			return nil, fmt.Errorf("scan scim user: %w", err)
 		}
-	} else {
-		// plain list by scim dir id
-		qSCIMUsers, err = s.q.ListSCIMUsers(ctx, queries.ListSCIMUsersParams{
-			ScimDirectoryID: scimDirID,
-			ID:              startID,
-			Limit:           int32(limit + 1),
-		})
-		if err != nil {
-			return nil, err
-		}
+		qSCIMUsers = append(qSCIMUsers, u)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate scim users: %w", err)
 	}
 
 	if err := commit(); err != nil {
 		return nil, fmt.Errorf("commit: %w", err)
 	}
 
+	return s.listSCIMUsersResponse(qSCIMUsers, limit)
+}
+
+func (s *Store) listSCIMUsersResponse(qSCIMUsers []queries.ScimUser, limit int) (*ssoreadyv1.ListSCIMUsersResponse, error) {
 	var scimUsers []*ssoreadyv1.SCIMUser
 	for _, qSCIMUser := range qSCIMUsers {
 		scimUsers = append(scimUsers, parseSCIMUser(qSCIMUser))
@@ -159,7 +223,23 @@ func (s *Store) GetSCIMUser(ctx context.Context, req *ssoreadyv1.GetSCIMUserRequ
 		return nil, err
 	}
 
-	return &ssoreadyv1.GetSCIMUserResponse{ScimUser: parseSCIMUser(qSCIMUser)}, nil
+	qGroups, err := q.ListSCIMGroupsForUser(ctx, queries.ListSCIMGroupsForUserParams{
+		ScimUserID:    id,
+		EnvironmentID: envID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list groups for user: %w", err)
+	}
+
+	scimUser := parseSCIMUser(qSCIMUser)
+	for _, qg := range qGroups {
+		scimUser.Groups = append(scimUser.Groups, &ssoreadyv1.SCIMGroupRef{
+			Id:          idformat.SCIMGroup.Format(qg.ID),
+			DisplayName: qg.DisplayName,
+		})
+	}
+
+	return &ssoreadyv1.GetSCIMUserResponse{ScimUser: scimUser}, nil
 }
 
 func (s *Store) ListSCIMGroups(ctx context.Context, req *ssoreadyv1.ListSCIMGroupsRequest) (*ssoreadyv1.ListSCIMGroupsResponse, error) {

@@ -1415,6 +1415,13 @@ export class ListSCIMUsersRequest extends Message<ListSCIMUsersRequest> {
    */
   pageToken = "";
 
+  /**
+   * SCIM filter expression (e.g. `userName eq "alice@example.com"`). If specified, only matching users are returned.
+   *
+   * @generated from field: string filter = 6;
+   */
+  filter = "";
+
   constructor(data?: PartialMessage<ListSCIMUsersRequest>) {
     super();
     proto3.util.initPartial(data, this);
@@ -1428,6 +1435,7 @@ export class ListSCIMUsersRequest extends Message<ListSCIMUsersRequest> {
     { no: 3, name: "organization_external_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "scim_group_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "page_token", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 6, name: "filter", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ListSCIMUsersRequest {

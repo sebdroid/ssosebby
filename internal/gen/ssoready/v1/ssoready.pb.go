@@ -1790,7 +1790,9 @@ type ListSCIMUsersRequest struct {
 	// If specified, only users that are members of this SCIM group are returned.
 	ScimGroupId string `protobuf:"bytes,4,opt,name=scim_group_id,json=scimGroupId,proto3" json:"scim_group_id,omitempty"`
 	// Pagination token. Leave empty to get the first page of results.
-	PageToken     string `protobuf:"bytes,5,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
+	PageToken string `protobuf:"bytes,5,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
+	// SCIM filter expression (e.g. `userName eq "alice@example.com"`). If specified, only matching users are returned.
+	Filter        string `protobuf:"bytes,6,opt,name=filter,proto3" json:"filter,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1856,6 +1858,13 @@ func (x *ListSCIMUsersRequest) GetScimGroupId() string {
 func (x *ListSCIMUsersRequest) GetPageToken() string {
 	if x != nil {
 		return x.PageToken
+	}
+	return ""
+}
+
+func (x *ListSCIMUsersRequest) GetFilter() string {
+	if x != nil {
+		return x.Filter
 	}
 	return ""
 }
@@ -9003,14 +9012,15 @@ const file_ssoready_v1_ssoready_proto_rawDesc = "" +
 	"samlFlowId\x1a=\n" +
 	"\x0fAttributesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xe8\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x80\x02\n" +
 	"\x14ListSCIMUsersRequest\x12*\n" +
 	"\x11scim_directory_id\x18\x01 \x01(\tR\x0fscimDirectoryId\x12'\n" +
 	"\x0forganization_id\x18\x02 \x01(\tR\x0eorganizationId\x128\n" +
 	"\x18organization_external_id\x18\x03 \x01(\tR\x16organizationExternalId\x12\"\n" +
 	"\rscim_group_id\x18\x04 \x01(\tR\vscimGroupId\x12\x1d\n" +
 	"\n" +
-	"page_token\x18\x05 \x01(\tR\tpageToken\"u\n" +
+	"page_token\x18\x05 \x01(\tR\tpageToken\x12\x16\n" +
+	"\x06filter\x18\x06 \x01(\tR\x06filter\"u\n" +
 	"\x15ListSCIMUsersResponse\x124\n" +
 	"\n" +
 	"scim_users\x18\x01 \x03(\v2\x15.ssoready.v1.SCIMUserR\tscimUsers\x12&\n" +
