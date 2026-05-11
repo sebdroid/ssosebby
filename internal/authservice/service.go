@@ -287,8 +287,6 @@ func (s *Service) samlAcs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// data that's only possible to validate if saml.Validate didn't return an
-	// error
 	var (
 		badSubjectID        *string
 		email               string
@@ -296,18 +294,10 @@ func (s *Service) samlAcs(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if validateRes != nil {
-		// extract a domain from the subject ID
-		subjectEmailDomain, err := emailaddr.Parse(validateRes.SubjectID)
-		if err != nil {
-			// the subject ID isn't an email
-			badSubjectID = &validateRes.SubjectID
-		}
+		var subjectEmailDomain string
+		email, subjectEmailDomain, badSubjectID = resolveEmail(validateRes)
 
-		// the subject ID is an email, validate that it's from the set of
-		// organization domains
 		if badSubjectID == nil {
-			email = validateRes.SubjectID
-
 			var domainOk bool
 			for _, domain := range dataRes.OrganizationDomains {
 				if domain == subjectEmailDomain {
@@ -430,7 +420,7 @@ func (s *Service) samlAcs(w http.ResponseWriter, r *http.Request) {
 	}
 	if badSubjectID != nil {
 		if err := errorTemplate.Execute(w, &errorTemplateData{
-			ErrorMessage: "Subject ID must be an email address. This needs to be fixed in the Identity Provider.",
+			ErrorMessage: "Could not determine email address — check the NameID format and mail attributes in the Identity Provider.",
 			SAMLFlowID:   createSAMLLoginRes.SAMLFlowID,
 			GotSubjectID: *badSubjectID,
 		}); err != nil {
@@ -512,4 +502,39 @@ func (s *Service) samlAcs(w http.ResponseWriter, r *http.Request) {
 	redirect := redirectURL.String()
 
 	http.Redirect(w, r, redirect, http.StatusSeeOther)
+}
+
+func resolveEmail(res *saml.ValidateResponse) (email, domain string, bad *string) {
+	if d, err := emailaddr.Parse(res.SubjectID); err == nil {
+		return res.SubjectID, d, nil
+	}
+
+	mailAttrKeys := []string{
+		"urn:mace:dir:attribute-def:mail",
+		"urn:oid:0.9.2342.19200300.100.1.3",
+	}
+
+	var mailValues []string
+	for _, key := range mailAttrKeys {
+		if v, ok := res.SubjectAttributes[key]; ok && v != "" {
+			mailValues = append(mailValues, v)
+		}
+	}
+
+	unique := make(map[string]struct{})
+	for _, v := range mailValues {
+		unique[strings.ToLower(v)] = struct{}{}
+	}
+	if len(unique) > 1 {
+		mismatch := fmt.Sprintf("mismatched mail attributes: %s", strings.Join(mailValues, " vs "))
+		return "", "", &mismatch
+	}
+	if len(mailValues) > 0 {
+		if d, err := emailaddr.Parse(mailValues[0]); err == nil {
+			return mailValues[0], d, nil
+		}
+	}
+
+	s := res.SubjectID
+	return "", "", &s
 }
