@@ -227,9 +227,9 @@ func (s *Service) oauthToken(w http.ResponseWriter, r *http.Request) {
 		panic(err)
 	}
 
-	eppn := res.Attributes["urn:oid:1.3.6.1.4.1.5923.1.1.1.6"]
+	eppn := res.Attributes["urn:mace:dir:attribute-def:eduPersonPrincipalName"]
 	if eppn == "" {
-		eppn = res.Attributes["urn:mace:dir:attribute-def:eduPersonPrincipalName"]
+		eppn = res.Attributes["urn:oid:1.3.6.1.4.1.5923.1.1.1.6"]
 	}
 
 	now := time.Now()
