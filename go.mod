@@ -1,6 +1,6 @@
 module github.com/sebdroid/ssosebby
 
-go 1.26.5
+go 1.26
 
 require (
 	connectrpc.com/connect v1.20.0
