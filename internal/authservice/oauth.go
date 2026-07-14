@@ -171,6 +171,7 @@ type idTokenClaims struct {
 	OrganizationID         string            `json:"organizationId"`
 	OrganizationExternalID string            `json:"organizationExternalId"`
 	Attributes             map[string]string `json:"attributes"`
+	Eppn                   string            `json:"eppn,omitempty"`
 }
 
 func (s *Service) oauthToken(w http.ResponseWriter, r *http.Request) {
@@ -226,6 +227,11 @@ func (s *Service) oauthToken(w http.ResponseWriter, r *http.Request) {
 		panic(err)
 	}
 
+	eppn := res.Attributes["urn:oid:1.3.6.1.4.1.5923.1.1.1.6"]
+	if eppn == "" {
+		eppn = res.Attributes["urn:mace:dir:attribute-def:eduPersonPrincipalName"]
+	}
+
 	now := time.Now()
 	claims := idTokenClaims{
 		Claims: jwt.Claims{
@@ -239,6 +245,7 @@ func (s *Service) oauthToken(w http.ResponseWriter, r *http.Request) {
 		OrganizationID:         res.OrganizationId,
 		OrganizationExternalID: res.OrganizationExternalId,
 		Attributes:             res.Attributes,
+		Eppn:                   eppn,
 	}
 
 	idToken, err := jwt.Signed(signer).Claims(claims).Serialize()
@@ -280,10 +287,12 @@ func (s *Service) oauthUserinfo(w http.ResponseWriter, r *http.Request) {
 		Sub           string `json:"sub"`
 		Email         string `json:"email"`
 		EmailVerified bool   `json:"email_verified"`
+		Eppn          string `json:"eppn,omitempty"`
 	}{
 		Sub:           claims.Subject,
 		Email:         claims.Subject,
 		EmailVerified: true,
+		Eppn:          claims.Eppn,
 	}
 
 	if err := json.NewEncoder(w).Encode(userinfo); err != nil {
