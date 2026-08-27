@@ -135,6 +135,7 @@ func (s *Service) samlInit(w http.ResponseWriter, r *http.Request) {
 		RequestID:  dataRes.RequestID,
 		SPEntityID: dataRes.SPEntityID,
 		Now:        time.Now(),
+		ForceAuthn: true,
 	})
 
 	if err := s.Store.AuthUpsertInitiateData(ctx, &store.AuthUpsertInitiateDataRequest{
