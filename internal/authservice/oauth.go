@@ -70,7 +70,7 @@ func (s *Service) oauthAuthorize(w http.ResponseWriter, r *http.Request) {
 	if forceAuthnParam == "" {
 		forceAuthnParam = r.URL.Query().Get("forceAuthn")
 	}
-	forceAuthn := forceAuthnParam != "" && forceAuthnParam != "false"
+	forceAuthn := forceAuthnParam != "false"
 
 	slog.InfoContext(ctx, "oauth_authorize", "org_id", orgID, "org_external_id", orgExternalID, "saml_conn_id", samlConnID, "force_authn", forceAuthn)
 
