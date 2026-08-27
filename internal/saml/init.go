@@ -11,6 +11,7 @@ type InitRequest struct {
 	RequestID  string
 	SPEntityID string
 	Now        time.Time
+	ForceAuthn bool
 }
 
 type InitResponse struct {
@@ -24,7 +25,8 @@ func Init(req *InitRequest) *InitResponse {
 	samlReq.Version = "2.0"
 	samlReq.IssueInstant = req.Now.UTC().Truncate(time.Millisecond)
 	samlReq.Issuer.Name = req.SPEntityID
-	samlReq.ForceAuthn = true
+	// omitempty: false emits no ForceAuthn attribute, which is the SAML 2.0 default
+	samlReq.ForceAuthn = req.ForceAuthn
 	samlReqData, err := xml.Marshal(samlReq)
 
 	if err != nil {

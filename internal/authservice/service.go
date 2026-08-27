@@ -135,6 +135,8 @@ func (s *Service) samlInit(w http.ResponseWriter, r *http.Request) {
 		RequestID:  dataRes.RequestID,
 		SPEntityID: dataRes.SPEntityID,
 		Now:        time.Now(),
+		// SP-initiated flows have no caller-supplied flag; keep the historical forced re-auth
+		ForceAuthn: true,
 	})
 
 	if err := s.Store.AuthUpsertInitiateData(ctx, &store.AuthUpsertInitiateDataRequest{
