@@ -66,7 +66,13 @@ func (s *Service) oauthAuthorize(w http.ResponseWriter, r *http.Request) {
 		samlConnID = r.URL.Query().Get("samlConnectionId")
 	}
 
-	slog.InfoContext(ctx, "oauth_authorize", "org_id", orgID, "org_external_id", orgExternalID, "saml_conn_id", samlConnID)
+	forceAuthnParam := r.URL.Query().Get("force_authn")
+	if forceAuthnParam == "" {
+		forceAuthnParam = r.URL.Query().Get("forceAuthn")
+	}
+	forceAuthn := forceAuthnParam != "" && forceAuthnParam != "false"
+
+	slog.InfoContext(ctx, "oauth_authorize", "org_id", orgID, "org_external_id", orgExternalID, "saml_conn_id", samlConnID, "force_authn", forceAuthn)
 
 	getClientRes, err := s.Store.AuthOAuthGetClient(ctx, &store.AuthOAuthGetClientRequest{
 		SAMLOAuthClientID: clientID,
@@ -140,6 +146,7 @@ func (s *Service) oauthAuthorize(w http.ResponseWriter, r *http.Request) {
 		RequestID:  samlFlowID,
 		SPEntityID: dataRes.SPEntityID,
 		Now:        time.Now(),
+		ForceAuthn: forceAuthn,
 	})
 
 	if err := s.Store.AuthUpsertOAuthAuthorizeData(ctx, &store.AuthUpsertOAuthAuthorizeDataRequest{
