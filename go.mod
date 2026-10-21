@@ -1,6 +1,6 @@
 module github.com/sebdroid/ssosebby
 
-go 1.26
+go 1.26.10
 
 require (
 	connectrpc.com/connect v1.20.0
@@ -32,10 +32,10 @@ require (
 	github.com/ssoready/prettyuuid v0.0.0-20241023163822-285da46017b3
 	github.com/stretchr/testify v1.11.1
 	github.com/ucarion/cli v0.2.0
-	golang.org/x/crypto v0.54.0
+	golang.org/x/crypto v0.57.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20260713224248-f5fc221cf8c4
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260713224248-f5fc221cf8c4
-	google.golang.org/grpc v1.82.0
+	google.golang.org/grpc v1.83.2
 	google.golang.org/protobuf v1.36.11
 )
 
@@ -67,10 +67,10 @@ require (
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/scim2/filter-parser v1.0.0
 	github.com/segmentio/backo-go v1.1.0 // indirect
-	golang.org/x/net v0.57.0 // indirect
-	golang.org/x/sync v0.22.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.40.0 // indirect
+	golang.org/x/net v0.60.0 // indirect
+	golang.org/x/sync v0.23.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
+	golang.org/x/text v0.42.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
